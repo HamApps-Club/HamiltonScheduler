@@ -223,6 +223,10 @@ a { color: inherit; }
   .hdr-actions { gap: 0.6rem; }
   .hdr-btn:not(.icon-only) { font-size: 0; gap: 0; }
   .hdr-btn svg { font-size: 1.2rem; }
+  /* Pin the theme grid to the header's right edge so it stays on screen on narrow phones. */
+  .hdr { position: relative; }
+  .theme-wrap { position: static; }
+  .theme-menu { grid-template-columns: repeat(2, minmax(0, 8.5rem)); }
   .brand { font-size: 1.15rem; }
   .bars { flex-wrap: wrap; }
   .main { grid-template-columns: 1fr; }
