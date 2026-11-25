@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { ALLOWED_EMAIL_DOMAIN, supabase } from './lib/supabase'
+import { ALLOWED_EMAIL_DOMAIN, initialAuthError, supabase } from './lib/supabase'
 import SignIn from './components/SignIn'
 import Planner from './components/Planner'
 
@@ -11,8 +11,7 @@ export default function App() {
 
   useEffect(() => {
     // Errors from the Google redirect (e.g. a non-Hamilton account rejected by the database).
-    const params = new URLSearchParams(window.location.hash.slice(1) || window.location.search)
-    const desc = params.get('error_description')
+    const desc = initialAuthError
     if (desc) {
       setAuthError(
         /hamilton\.edu|Database error/i.test(desc)
