@@ -35,13 +35,15 @@ export default function Header({ mode, onToggleMode, paletteIndex, onPalette }: 
             <PaletteIcon /> Theme
           </button>
           {menuOpen && (
-            <div className="menu" role="menu">
+            <div className="menu theme-menu" role="menu" aria-label="Themes">
               {PALETTES.map((p, i) => (
                 <button key={p.name} role="menuitemradio" aria-checked={i === paletteIndex}
-                  className={i === paletteIndex ? 'menu-item active' : 'menu-item'}
+                  className={i === paletteIndex ? 'theme-card active' : 'theme-card'}
                   onClick={() => { onPalette(i); setMenuOpen(false) }}>
-                  <span className="swatches">{p.colors.slice(0, 5).map((c) => <i key={c} style={{ background: c }} />)}</span>
-                  {p.name}
+                  <span className="theme-stripes" aria-hidden="true">
+                    {[...(p.swatch ?? []), ...p.colors].map((c, j) => <i key={j} style={{ background: c }} />)}
+                  </span>
+                  <span className="theme-name">{p.name}</span>
                 </button>
               ))}
             </div>

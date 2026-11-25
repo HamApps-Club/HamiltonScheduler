@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as api from '../lib/api'
 import { buildIcs, downloadIcs } from '../lib/ics'
-import { applyMode, initialMode, loadPref, PALETTES, savePref, type Mode } from '../lib/theme'
+import { applyMode, applyPaletteUi, initialMode, loadPref, PALETTES, savePref, type Mode } from '../lib/theme'
 import { MAX_SCHEDULES_PER_TERM, type Course, type Schedule, type SectionWithCourse, type Term } from '../lib/types'
 import Header from './Header'
 import Sidebar, { type SavedCourse } from './Sidebar'
@@ -25,7 +25,17 @@ export default function Planner() {
   const [paletteIndex, setPaletteIndex] = useState(() => Number(loadPref('hs-palette')) || 0)
 
   useEffect(() => applyMode(mode), [mode])
-  useEffect(() => savePref('hs-palette', String(paletteIndex)), [paletteIndex])
+  useEffect(() => {
+    savePref('hs-palette', String(paletteIndex))
+    applyPaletteUi(PALETTES[paletteIndex] ?? PALETTES[0])
+  }, [paletteIndex])
+
+  // Picking a theme that comes in a light or dark version also switches the mode.
+  const choosePalette = useCallback((i: number) => {
+    setPaletteIndex(i)
+    const m = PALETTES[i]?.mode
+    if (m) setMode(m)
+  }, [])
 
   const run = useCallback(async (fn: () => Promise<void>) => {
     setError(null)
@@ -204,7 +214,7 @@ export default function Planner() {
   return (
     <div className="shell">
       <Header mode={mode} onToggleMode={() => setMode((m) => (m === 'dark' ? 'light' : 'dark'))}
-        paletteIndex={paletteIndex} onPalette={setPaletteIndex} />
+        paletteIndex={paletteIndex} onPalette={choosePalette} />
 
       {(error || notice) && (
         <div className="banner" role="alert">
