@@ -30,7 +30,7 @@ export default function Header({ mode, onToggleMode, paletteIndex, onPalette }: 
         <button className="hdr-btn icon-only" onClick={onToggleMode} aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
           {mode === 'dark' ? <MoonIcon /> : <SunIcon />}
         </button>
-        <div className="menu-wrap" ref={menuRef}>
+        <div className="menu-wrap theme-wrap" ref={menuRef}>
           <button className="hdr-btn" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen}>
             <PaletteIcon /> Theme
           </button>
