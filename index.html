@@ -13,11 +13,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet" />
     <script>
-      // Apply the saved light/dark choice before the page paints (avoids a flash).
+      // Apply the saved light/dark choice and theme colors before the page paints (avoids a flash).
       try {
         var m = localStorage.getItem('hs-mode')
         if (m !== 'light' && m !== 'dark') m = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
         document.documentElement.dataset.theme = m
+        var ui = localStorage.getItem('hs-ui')
+        if (ui) document.documentElement.dataset.palette = ui
       } catch (e) {}
     </script>
     <title>Hamilton Scheduler</title>
