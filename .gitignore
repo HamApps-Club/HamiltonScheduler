@@ -1,0 +1,26 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Dependencies / build output
+node_modules/
+dist/
+.vite/
+
+# SST (AWS deploy tool) local state
+.sst/
+
+# OS / editor
+.DS_Store
+*.log
+
+# Local-only inputs and raw data
+.secrets/
+data/raw/
+
+# Local data tools stay on this computer only
+scripts/
+
+# Course data files and their docs stay on this computer only
+data/
