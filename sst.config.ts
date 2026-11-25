@@ -1,7 +1,9 @@
 /// <reference path="./.sst/platform/config.d.ts" />
 
 // Hosting for the Hamilton Scheduler:
-// - Web: the built React app in a private S3 bucket, served through CloudFront.
+// - Router: CloudFront for scheduler.hamapps.dev; /api/auth/* → Auth Lambda, everything else → Web.
+// - Web: the built React app in a private S3 bucket.
+// - Auth: the Google sign-in server (same method as HamEats), see infra/auth.ts.
 // - SupabaseCheck: one small Lambda, run daily, that checks Supabase (which also keeps the
 //   free project from pausing) and emails ALERT_EMAIL through SNS if it's down.
 //
@@ -21,7 +23,11 @@ export default $config({
       removal: input?.stage === 'production' ? 'retain' : 'remove',
       protect: input?.stage === 'production',
       providers: {
-        aws: { profile: 'hamapps', region: 'us-east-2' },
+        // Uses the `hamapps` profile, unless temporary credentials were passed in the environment
+        // (needed with `aws login`: run `eval "$(aws configure export-credentials --profile hamapps --format env)"` first).
+        aws: { region: 'us-east-2', ...(process.env.AWS_ACCESS_KEY_ID ? {} : { profile: 'hamapps' }) },
+        // DNS for scheduler.hamapps.dev. Reads CLOUDFLARE_API_TOKEN and CLOUDFLARE_DEFAULT_ACCOUNT_ID from .env.
+        cloudflare: '6.15.0',
       },
     }
   },
@@ -34,18 +40,49 @@ export default $config({
     if (/sb_secret_|service_role/.test(publishableKey)) {
       throw new Error('VITE_SUPABASE_PUBLISHABLE_KEY looks like a SECRET key. Use the publishable key; never ship the secret key to the browser.')
     }
+    if (!process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_DEFAULT_ACCOUNT_ID) {
+      throw new Error('Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_DEFAULT_ACCOUNT_ID in .env (needed for scheduler.hamapps.dev).')
+    }
     if (/127\.0\.0\.1|localhost/.test(supabaseUrl)) {
       throw new Error('VITE_SUPABASE_URL points at the local database. Use your online project URL for deploys.')
     }
 
-    const site = new sst.aws.StaticSite('Web', {
+    const SITE_URL = 'https://scheduler.hamapps.dev'
+    for (const k of ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'AUTH_COOKIE_SECRET']) {
+      if (!process.env[k]) throw new Error(`Set ${k} in .env (needed by the /api/auth sign-in server).`)
+    }
+
+    // One CloudFront entry point for scheduler.hamapps.dev: /api/auth/* goes to the sign-in Lambda,
+    // everything else to the static site. SKIP_DOMAIN=1 deploys without the domain (only needed once,
+    // to move the domain off the old distribution).
+    const router = new sst.aws.Router('Router', {
+      domain: process.env.SKIP_DOMAIN ? undefined : { name: 'scheduler.hamapps.dev', dns: sst.cloudflare.dns() },
+    })
+
+    new sst.aws.StaticSite('Web', {
       build: { command: 'npm run build', output: 'dist' },
       environment: {
         VITE_SUPABASE_URL: supabaseUrl,
         VITE_SUPABASE_PUBLISHABLE_KEY: publishableKey,
       },
-      // After the domain moves (after Dec 3), uncomment and set up a Cloudflare API token:
-      // domain: { name: 'scheduler.hamapps.dev', dns: sst.cloudflare.dns() },
+      router: { instance: router },
+    })
+
+    // Sign-in server (same method as HamEats): Google redirects back to SITE_URL/api/auth/callback/google.
+    new sst.aws.Function('Auth', {
+      handler: 'infra/auth.handler',
+      runtime: 'nodejs22.x',
+      timeout: '15 seconds',
+      memory: '256 MB',
+      url: { router: { instance: router, path: '/api/auth' } },
+      environment: {
+        SITE_URL,
+        GOOGLE_CLIENT_ID: process.env.GOOGLE_OAUTH_CLIENT_ID!,
+        GOOGLE_CLIENT_SECRET: process.env.GOOGLE_OAUTH_CLIENT_SECRET!,
+        AUTH_COOKIE_SECRET: process.env.AUTH_COOKIE_SECRET!,
+        SUPABASE_URL: supabaseUrl,
+        SUPABASE_PUBLISHABLE_KEY: publishableKey,
+      },
     })
 
     // Daily Supabase check + email alert.
@@ -71,6 +108,6 @@ export default $config({
       },
     })
 
-    return { url: site.url }
+    return { url: router.url }
   },
 })

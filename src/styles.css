@@ -189,3 +189,7 @@ a { color: inherit; }
   .cal { overflow-x: auto; }
   .cal-head, .cal-body { min-width: 36rem; }
 }
+
+
+.google-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem; align-self: center; min-width: 16rem; background: #fff; color: #1f1f1f; border: 1px solid #dadce0; border-radius: 999px; padding: 0.65rem 1.2rem; font-weight: 600; }
+.google-btn:hover:not(:disabled) { background: #f8f9fa; }
