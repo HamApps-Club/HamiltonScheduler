@@ -44,6 +44,40 @@
   color-scheme: dark;
 }
 
+/* Navy & Buff themes: HamApps navy, cream and gold. Set by applyPaletteUi() in lib/theme.ts. */
+:root[data-palette='navy-buff']:not([data-theme='dark']) {
+  --bg: #f6f3ec;
+  --surface: #fffdf8;
+  --surface-2: #ebe5d8;
+  --input: #fffdf8;
+  --text: #142640;
+  --muted: #5b6577;
+  --line: #e1d9c9;
+  --tab-active: #0f366f;
+  --tab-active-text: #f8f4ee;
+  --events: #e3c06f;
+  --events-text: #2b2208;
+  --result: #eef1f6;
+  --accent: #0f366f;
+  --accent-text: #f8f4ee;
+}
+:root[data-palette='navy-buff'][data-theme='dark'] {
+  --bg: #0a1a33;
+  --surface: #0f2445;
+  --surface-2: #173159;
+  --input: #132a50;
+  --text: #f1ede5;
+  --muted: #a9b9d8;
+  --line: #24406b;
+  --tab-active: #e3c06f;
+  --tab-active-text: #1a1405;
+  --events: #35609f;
+  --events-text: #f8f4ee;
+  --result: #132a50;
+  --accent: #e3c06f;
+  --accent-text: #0b2b5a;
+}
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); }
@@ -96,8 +130,15 @@ a { color: inherit; }
 .menu.right { left: auto; right: 0; }
 .menu-item { display: flex; align-items: center; gap: 0.6rem; background: none; border: 0; border-radius: 6px; padding: 0.4rem 0.5rem; text-align: left; }
 .menu-item:hover, .menu-item.active { background: var(--surface-2); }
-.swatches { display: inline-flex; }
-.swatches i { width: 0.8rem; height: 0.8rem; border-radius: 2px; margin-right: 2px; }
+/* Theme picker: a grid of cards, each a stack of the theme's color stripes with its name below. */
+.theme-menu { left: auto; right: 0; display: grid; grid-template-columns: repeat(2, 8.5rem); gap: 0.5rem; padding: 0.6rem; max-width: calc(100vw - 1rem); }
+.theme-card { display: flex; flex-direction: column; padding: 0; background: var(--surface); color: var(--text); border: 2px solid var(--line); border-radius: 8px; overflow: hidden; text-align: left; }
+.theme-card:hover { border-color: var(--muted); }
+.theme-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.theme-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-stripes { display: flex; flex-direction: column; }
+.theme-stripes i { display: block; height: 0.55rem; }
+.theme-name { padding: 0.3rem 0.5rem; font-size: 0.8rem; font-weight: 700; }
 .menu-check { display: flex; gap: 0.5rem; align-items: center; padding: 0.35rem 0.5rem; white-space: nowrap; }
 
 /* ---------- Main ---------- */
