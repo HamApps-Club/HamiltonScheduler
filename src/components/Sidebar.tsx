@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { conflictsWithAny } from '../lib/time'
+import { TYPE_FILTERS, matchesTypes, type TypeFilterId } from '../lib/filters'
 import { darken } from '../lib/theme'
 import type { Course, SectionWithCourse } from '../lib/types'
 import { BookIcon, ChevronsDownIcon, GearIcon, InfoIcon, MinusIcon, PlusIcon, ShareIcon } from './Icons'
@@ -49,6 +50,7 @@ export default function Sidebar(p: Props) {
   const [hideCanceled, setHideCanceled] = useState(true)
   const [hideClosed, setHideClosed] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
+  const [typeFilters, setTypeFilters] = useState<ReadonlySet<TypeFilterId>>(new Set())
   const settingsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -60,18 +62,27 @@ export default function Sidebar(p: Props) {
 
   const savedIds = useMemo(() => new Set(p.saved.map((s) => s.course.id)), [p.saved])
 
+  const toggleType = (id: TypeFilterId) => setTypeFilters((prev) => {
+    const next = new Set(prev)
+    if (!next.delete(id)) next.add(id)
+    return next
+  })
+  // With a type filter on, an empty search lists every matching course.
+  const showResults = query.trim() !== '' || typeFilters.size > 0
+
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return []
+    if (!q && typeFilters.size === 0) return []
     return p.courses.filter((c) => {
-      if (savedIds.has(c.id) || !matches(c, q)) return false
+      if (savedIds.has(c.id) || (q && !matches(c, q))) return false
       let secs = c.sections
       if (hideCanceled) secs = secs.filter((s) => s.status !== 'canceled')
       if (hideClosed) secs = secs.filter((s) => s.status !== 'closed')
+      if (typeFilters.size) secs = secs.filter((s) => matchesTypes(s, typeFilters))
       if (noConflicts) secs = secs.filter((s) => !conflictsWithAny(s, p.scheduled))
       return secs.length > 0
     })
-  }, [query, p.courses, p.scheduled, savedIds, noConflicts, hideCanceled, hideClosed])
+  }, [query, p.courses, p.scheduled, savedIds, noConflicts, hideCanceled, hideClosed, typeFilters])
 
   const firstSectionId = (c: Course) => (c.sections.find((s) => s.status !== 'canceled') ?? c.sections[0])?.id
 
@@ -95,6 +106,16 @@ export default function Sidebar(p: Props) {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="chips" role="group" aria-label="Course type filters">
+        {TYPE_FILTERS.map((f) => (
+          <button key={f.id} className={typeFilters.has(f.id) ? 'chip active' : 'chip'}
+            aria-pressed={typeFilters.has(f.id)} onClick={() => toggleType(f.id)}>
+            {f.label}
+          </button>
+        ))}
+        {typeFilters.size > 0 && <button className="chip clear" onClick={() => setTypeFilters(new Set())}>Clear</button>}
       </div>
 
       <div className="side-head">
@@ -129,7 +150,7 @@ export default function Sidebar(p: Props) {
         })}
       </ul>
 
-      {query.trim() && (
+      {showResults && (
         <>
           <div className="divider"><span /></div>
           <div className="side-head"><h3>{results.length} Search Result{results.length === 1 ? '' : 's'}</h3></div>
@@ -152,7 +173,7 @@ export default function Sidebar(p: Props) {
                 </li>
               )
             })}
-            {results.length > MAX_RESULTS && <li className="muted small pad">Showing the first {MAX_RESULTS}. Keep typing to narrow.</li>}
+            {results.length > MAX_RESULTS && <li className="muted small pad">Showing the first {MAX_RESULTS}. {query.trim() ? 'Keep typing' : 'Search or add a filter'} to narrow.</li>}
           </ul>
         </>
       )}
