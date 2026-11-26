@@ -1,21 +1,15 @@
 -- LOCAL DEVELOPMENT ONLY. Loaded by `supabase start` / `supabase db reset`.
 -- Never pushed to the online project (`supabase db push` does not run seed files).
--- Load order (supabase/config.jsonc): this file (terms, test student), then
--- seeds/2026FA-catalog.sql (the real Fall 2026 catalog, copied from the online project by
--- scripts/make-seed.ts), then seeds/dev-schedule.sql (Fall classes on the test student's schedule).
--- Fall 2026 matches the online project; Spring 2027 is still a one-course placeholder.
+-- Load order (supabase/config.jsonc): this file (terms, test student), then the real
+-- course catalogs copied from the online project by scripts/make-seed.ts
+-- (seeds/2026FA-catalog.sql, seeds/2027SP-catalog.sql), then seeds/dev-schedule.sql
+-- (classes on the test student's schedules).
+-- Term dates and no-class days match the online project (from the academic calendar).
 
 insert into public.terms (id, name, is_active, start_date, end_date, no_class_dates) values
   ('2026SP', 'Spring 2026', false, '2026-01-21', '2026-05-08', '{}'),
   ('2026FA', 'Fall 2026',   true,  '2026-08-27', '2026-12-11', '{2026-10-15,2026-10-16,2026-11-23,2026-11-24,2026-11-25,2026-11-26,2026-11-27}'),
-  ('2027SP', 'Spring 2027', true,  '2027-01-20', '2027-05-07', '{2027-03-15,2027-03-16,2027-03-17,2027-03-18,2027-03-19}');
-
--- The one sample course shown for now. Unknown details (instructor, room, credits) are left blank.
-insert into public.courses (term_id, code, title, department) values
-  ('2027SP', 'AFRST 159', 'Elementary Jazz Dance', 'Africana Studies');
-
-insert into public.sections (course_id, section, days, start_time, end_time, status)
-select id, '01', 'MW', '08:30', '09:45', 'open' from public.courses where term_id = '2027SP' and code = 'AFRST 159';
+  ('2027SP', 'Spring 2027', true,  '2027-01-20', '2027-05-11', '{2027-03-15,2027-03-16,2027-03-17,2027-03-18,2027-03-19,2027-03-22,2027-03-23,2027-03-24,2027-03-25,2027-03-26}');
 
 -- Local test student (password sign-in works ONLY on the local stack; the online
 -- project has email/password sign-in turned off). Marked as a Google account so the
@@ -37,11 +31,3 @@ values (
   '{"sub":"d0000000-0000-4000-8000-000000000001","email":"dev@hamilton.edu","email_verified":true}',
   now(), now(), now()
 );
-
--- Put AFRST 159-01 on the test student's "My Schedule" (created by the first-login trigger).
-insert into public.schedule_sections (schedule_id, section_id)
-select sch.id, sec.id
-from public.schedules sch
-join public.courses c on c.term_id = sch.term_id and c.code = 'AFRST 159'
-join public.sections sec on sec.course_id = c.id and sec.section = '01'
-where sch.user_id = 'd0000000-0000-4000-8000-000000000001' and sch.name = 'My Schedule';

@@ -14,7 +14,7 @@ Needs Docker Desktop running.
 
 ```bash
 npm install
-supabase start          # local database + login service, loads the sample data (real Fall 2026 catalog + test student)
+supabase start          # local database + login service, loads the sample data (real Fall 2026 + Spring 2027 catalogs, test student)
 npm run dev             # http://127.0.0.1:5173
 ```
 
@@ -36,7 +36,7 @@ development against the local database.
 supabase/migrations/   database tables, rules, and security policies
 supabase/tests/        database tests (pgTAP)
 supabase/seed.sql      LOCAL-ONLY semesters and test student
-supabase/seeds/        LOCAL-ONLY Fall 2026 catalog (copied from the live site) + test schedule
+supabase/seeds/        LOCAL-ONLY course catalogs (copied from the live site) + test schedules
 src/                   the React app
 infra/auth.ts          Google sign-in server (Lambda at /api/auth)
 infra/keepalive.ts     daily Supabase check; emails an alert if it's down
