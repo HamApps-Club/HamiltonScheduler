@@ -75,6 +75,15 @@ describe('buildIcs', () => {
     expect(out).toContain('DTSTART;TZID=America/New_York:20270513T090000') // …but the Thursday final stays
     expect(out).toContain('BYDAY=TH;UNTIL=20270518T035959Z')
   })
+  it('keeps exams under other spellings and meetings that start after classes end', () => {
+    const out = unfold(buildIcs(term, [section({ meetings: [
+      { days: 'R', start_time: '09:00', end_time: '12:00', type: 'Exam', start_date: '2027-05-12', end_date: '2027-05-17' },
+      { days: 'F', start_time: '14:00', end_time: '16:00', type: null, start_date: '2027-05-10', end_date: '2027-05-15' },
+    ] })]))
+    expect(out.match(/BEGIN:VEVENT/g)).toHaveLength(2)
+    expect(out).toContain('DTSTART;TZID=America/New_York:20270513T090000') // Thursday exam kept
+    expect(out).toContain('DTSTART;TZID=America/New_York:20270514T140000') // Friday session after classes kept
+  })
   it('folds long lines to 75 octets', () => {
     const long = buildIcs(term, [section({ course: { ...course, title: 'X'.repeat(200) } })])
     for (const line of long.split('\r\n')) expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75)
