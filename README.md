@@ -51,7 +51,19 @@ maintainer's computer; see `scripts/README.md` there.
 ## Adding a search filter
 
 No database access needed: the local seed has the full real catalogs, and filters run in the
-browser on the semester's loaded courses (`src/components/Sidebar.tsx`, the `results` list).
+browser on the semester's loaded courses.
+
+The chips under the search box (Writing Intensive, Quantitative, First Year, …) come from
+`TYPE_FILTERS` in `src/lib/filters.ts`. **To add a course-type filter, add one line there**; the chip,
+the filtering and the empty-search browsing all follow from it:
+
+```ts
+{ id: 'qlit', label: 'Quant Literacy', types: ['Qlit Course'] },
+```
+
+A filter matches a section that has any of its `types` labels; with several chips on, a section must
+match all of them. With any chip on, an empty search lists every matching course. Add a test case in
+`src/lib/filters.test.ts`.
 
 Each section has `types`: the course types from Self-Service. Labels are Self-Service's own:
 
@@ -67,21 +79,12 @@ Each section has `types`: the course types from Self-Service. Labels are Self-Se
 | `Soc, Struct & Inst Hier` | Social structures & institutional hierarchies |
 | `Senior Project`, `Co-Lab Course`, `Experiential Learning`, `Physical Education Course`, … | Others; list them all with `select distinct unnest(types) from sections;` |
 
-Types are per **section** (e.g. only one MATH 113 section is first-years only), so filter sections
-the same way "Hide closed" does. A "Writing intensive only" checkbox is:
+Types are per **section** (e.g. only one MATH 113 section is first-years only), so filters keep the
+sections that match, the same way "Hide closed" does (`src/components/Sidebar.tsx`, the `results` list).
+Other kinds of filter (time of day, credits, …) go in that same list.
 
-```tsx
-const [writingOnly, setWritingOnly] = useState(false)
-// in the results filter, next to hideClosed:
-if (writingOnly) secs = secs.filter((s) => s.types.includes('Writing Intensive Courses'))
-// add writingOnly to the useMemo dependency list, and a checkbox in the settings menu
-```
-
-Filters in `results` only narrow **search results**: with an empty search box the list is empty by design,
-so type a search (e.g. a department) to see a filter work.
-
-Show friendlier labels in the app (a small map in code) rather than renaming them in the database,
-so the next catalog import keeps matching.
+Keep Self-Service's labels in the database and put friendly names in `label`, so the next catalog
+import keeps matching.
 
 ## Secrets
 
