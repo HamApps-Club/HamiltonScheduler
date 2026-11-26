@@ -15,7 +15,7 @@ const course: Course = {
 const section = (over: Partial<SectionWithCourse>): SectionWithCourse => ({
   id: 7, course_id: 1, section: '02', instructors: ['A. Prof'], days: 'TR', start_time: '13:00:00', end_time: '14:15:00',
   building: 'Taylor Science', room: '2004', capacity: 30,
-  status: 'open', meetings: [], comments: null, course, ...over,
+  status: 'open', meetings: [], comments: null, types: [], course, ...over,
 })
 const unfold = (ics: string) => ics.replace(/\r\n /g, '')
 
