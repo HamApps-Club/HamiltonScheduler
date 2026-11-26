@@ -100,7 +100,10 @@ export function buildIcs(term: Term, sections: SectionWithCourse[], now: Date = 
     meetingsOf(s).forEach((m: Meeting, i) => {
       const days = parseDays(m.days)
       const startDate = m.start_date ?? term.start_date
-      const endDate = m.end_date ?? term.end_date
+      // Regular meetings stop at the last day of classes: Self-Service sometimes dates a section through
+      // exam week (e.g. 17 Spring 2027 sections end May 17, classes end May 11). Final exams keep their dates.
+      const ownEnd = m.end_date ?? term.end_date
+      const endDate = m.type === 'FINAL' || ownEnd <= term.end_date ? ownEnd : term.end_date
       const first = firstMeetingDate(startDate, days)
       if (!first || fmtDate(first) > endDate.replaceAll('-', '')) return
 
