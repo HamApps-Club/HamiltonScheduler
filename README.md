@@ -48,6 +48,41 @@ sst.config.ts          AWS hosting (CloudFront Router, S3 site, Lambdas, alerts)
 Course data tools (`scripts/`) and data files (`data/`) are git-ignored and stay on the
 maintainer's computer; see `scripts/README.md` there.
 
+## Adding a search filter
+
+No database access needed: the local seed has the full real catalogs, and filters run in the
+browser on the semester's loaded courses (`src/components/Sidebar.tsx`, the `results` list).
+
+Each section has `types`: the course types from Self-Service. Labels are Self-Service's own:
+
+| Label in `types` | Meaning |
+|---|---|
+| `Writing Intensive Courses` | Writing-intensive. Use this label, not the code: most W codes match, but not all (e.g. SOC 276W in Spring 2027 is untagged) |
+| `Speaking Intensive Course` | Speaking-intensive |
+| `Quantitative & Symbolic R` | Quantitative & symbolic reasoning |
+| `Qlit Course` | Quantitative literacy |
+| `First Year Courses` | Reserved for first-years (can be one section of a course) |
+| `Proseminar` | Proseminar |
+| `Cultural Diversity Course`, `Diversity Course` | Diversity requirements |
+| `Soc, Struct & Inst Hier` | Social structures & institutional hierarchies |
+| `Senior Project`, `Co-Lab Course`, `Experiential Learning`, `Physical Education Course`, … | Others; list them all with `select distinct unnest(types) from sections;` |
+
+Types are per **section** (e.g. only one MATH 113 section is first-years only), so filter sections
+the same way "Hide closed" does. A "Writing intensive only" checkbox is:
+
+```tsx
+const [writingOnly, setWritingOnly] = useState(false)
+// in the results filter, next to hideClosed:
+if (writingOnly) secs = secs.filter((s) => s.types.includes('Writing Intensive Courses'))
+// add writingOnly to the useMemo dependency list, and a checkbox in the settings menu
+```
+
+Filters in `results` only narrow **search results**: with an empty search box the list is empty by design,
+so type a search (e.g. a department) to see a filter work.
+
+Show friendlier labels in the app (a small map in code) rather than renaming them in the database,
+so the next catalog import keeps matching.
+
 ## Secrets
 
 Never commit `.env`. Copy `.env.example` to `.env` and fill in:

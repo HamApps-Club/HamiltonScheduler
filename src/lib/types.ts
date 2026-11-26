@@ -35,6 +35,9 @@ export interface Section {
   status: SectionStatus
   meetings: Meeting[]
   comments: string | null
+  /** Self-Service course types for this section, e.g. "Writing Intensive Courses", "First Year Courses".
+   *  Use these for search filters (see README: "Adding a search filter"). */
+  types: string[]
 }
 
 export interface Course {
