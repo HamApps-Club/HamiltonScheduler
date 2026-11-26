@@ -1,10 +1,13 @@
 -- LOCAL DEVELOPMENT ONLY. Loaded by `supabase start` / `supabase db reset`.
 -- Never pushed to the online project (`supabase db push` does not run seed files).
--- Placeholder catalog data until the real course import runs.
+-- Load order (supabase/config.jsonc): this file (terms, test student), then
+-- seeds/2026FA-catalog.sql (the real Fall 2026 catalog, copied from the online project by
+-- scripts/make-seed.ts), then seeds/dev-schedule.sql (Fall classes on the test student's schedule).
+-- Fall 2026 matches the online project; Spring 2027 is still a one-course placeholder.
 
 insert into public.terms (id, name, is_active, start_date, end_date, no_class_dates) values
   ('2026SP', 'Spring 2026', false, '2026-01-21', '2026-05-08', '{}'),
-  ('2026FA', 'Fall 2026',   false, '2026-08-27', '2026-12-11', '{2026-10-12,2026-10-13,2026-11-25,2026-11-26,2026-11-27}'),
+  ('2026FA', 'Fall 2026',   true,  '2026-08-27', '2026-12-11', '{2026-10-15,2026-10-16,2026-11-23,2026-11-24,2026-11-25,2026-11-26,2026-11-27}'),
   ('2027SP', 'Spring 2027', true,  '2027-01-20', '2027-05-07', '{2027-03-15,2027-03-16,2027-03-17,2027-03-18,2027-03-19}');
 
 -- The one sample course shown for now. Unknown details (instructor, room, credits) are left blank.
