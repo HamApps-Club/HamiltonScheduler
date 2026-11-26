@@ -1,7 +1,8 @@
 # Hamilton Scheduler
 
 A HamApps project: plan your Hamilton College semester. Search the course catalog,
-build up to three schedules per semester on a weekly calendar, and export to Google Calendar.
+build up to three schedules per semester on a weekly calendar, and download a schedule as an
+`.ics` calendar file (class meetings and final exams) for Google Calendar, Apple Calendar or Outlook.
 
 - **Front end:** React + Vite (TypeScript)
 - **Database:** Supabase (Postgres, Row Level Security)
@@ -25,7 +26,7 @@ development against the local database.
 | Command | What it does |
 |---|---|
 | `npm test` | Unit tests (time conflicts, calendar export) |
-| `npm run db:test` | Database tests: sign-up rules, RLS, schedule limits (30 checks) |
+| `npm run db:test` | Database tests: sign-up rules, RLS, schedule limits (34 checks) |
 | `npm run typecheck` | TypeScript check |
 | `supabase db reset` | Wipe the local database and rebuild it from migrations + seed |
 | `supabase stop` | Stop the local containers |
