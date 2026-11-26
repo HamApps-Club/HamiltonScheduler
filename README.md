@@ -57,7 +57,7 @@ Each section has `types`: the course types from Self-Service. Labels are Self-Se
 
 | Label in `types` | Meaning |
 |---|---|
-| `Writing Intensive Courses` | Writing-intensive (codes ending in W) |
+| `Writing Intensive Courses` | Writing-intensive. Use this label, not the code: most W codes match, but not all (e.g. SOC 276W in Spring 2027 is untagged) |
 | `Speaking Intensive Course` | Speaking-intensive |
 | `Quantitative & Symbolic R` | Quantitative & symbolic reasoning |
 | `Qlit Course` | Quantitative literacy |
@@ -76,6 +76,9 @@ const [writingOnly, setWritingOnly] = useState(false)
 if (writingOnly) secs = secs.filter((s) => s.types.includes('Writing Intensive Courses'))
 // add writingOnly to the useMemo dependency list, and a checkbox in the settings menu
 ```
+
+Filters in `results` only narrow **search results**: with an empty search box the list is empty by design,
+so type a search (e.g. a department) to see a filter work.
 
 Show friendlier labels in the app (a small map in code) rather than renaming them in the database,
 so the next catalog import keeps matching.
