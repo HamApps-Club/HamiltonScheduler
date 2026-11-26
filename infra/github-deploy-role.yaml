@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   The role GitHub Actions uses to run `sst deploy --stage production` for the Hamilton Scheduler on every push to
-  main (.github/workflows/deploy.yml). Only the main branch of HamApps-Club/HamiltonScheduler can use it. Deploy in
+  main (.github/workflows/deploy.yml). Only the main branch of HamAppsDev/HamiltonScheduler can use it. Deploy in
   us-east-2 (the project's Region):
 
     aws cloudformation deploy --profile hamapps --region us-east-2 --stack-name hamilton-scheduler-github \
@@ -10,11 +10,11 @@ Description: >-
 Parameters:
   GitHubRepo:
     Type: String
-    Default: HamApps-Club/HamiltonScheduler
+    Default: HamAppsDev/HamiltonScheduler
     Description: owner/name of the repository whose main branch may deploy.
   GitHubSubPrefix:
     Type: String
-    Default: repo:HamApps-Club@359968926/HamiltonScheduler@1470434569
+    Default: repo:HamAppsDev@359968926/HamiltonScheduler@1470434569
     Description: >-
       The same repository as GitHub now names it in its sign-in tokens (owner@id/name@id; see
       `gh api repos/OWNER/NAME/actions/oidc/customization/sub`). Accepted along with the plain owner/name form.
