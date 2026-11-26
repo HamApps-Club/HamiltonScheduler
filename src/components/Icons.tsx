@@ -42,9 +42,5 @@ export const BookIcon = () => (
 export const InfoIcon = () => <Icon><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></Icon>
 export const ListIcon = () => <Icon><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" /></Icon>
 export const LogoMark = () => (
-  <svg viewBox="0 0 32 32" width="1.9em" height="1.9em" aria-hidden="true">
-    <rect width="32" height="32" rx="7" fill="#1f4fb5" />
-    <rect x="7" y="9" width="18" height="16" rx="2" fill="none" stroke="#fff" strokeWidth="2" />
-    <path d="M7 14h18M12 6v5M20 6v5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-  </svg>
+  <img src="/favicon.svg" width="38" height="38" alt="" aria-hidden="true" className="logo-mark" />
 )
