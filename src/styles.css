@@ -105,6 +105,7 @@ a { color: inherit; }
 
 .hdr { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 0.5rem; font-size: 1.45rem; font-weight: 500; }
+.logo-mark { width: 1.9em; height: 1.9em; display: block; flex-shrink: 0; }
 .hdr-actions { display: flex; align-items: center; gap: 1.1rem; }
 .hdr-btn { display: inline-flex; align-items: center; gap: 0.35rem; background: none; border: 0; padding: 0.2rem; font-size: 1.05rem; text-decoration: none; }
 .hdr-btn:hover { opacity: 0.75; }
