@@ -3,6 +3,8 @@ import { DAY_TO_JS, meetingsOf, parseDays, type DayLetter } from './time'
 
 const TZID = 'America/New_York'
 const ICAL_DAY: Record<DayLetter, string> = { M: 'MO', T: 'TU', W: 'WE', R: 'TH', F: 'FR', S: 'SA', U: 'SU' }
+/** Final exams: Colleague codes them FINAL; accept close variants and any letter case. */
+const isExam = (m: Meeting) => /^(final|fin|exam)/i.test(m.type ?? '')
 
 // Standard US Eastern time zone definition, so calendar apps place events correctly.
 const VTIMEZONE = [
@@ -100,7 +102,12 @@ export function buildIcs(term: Term, sections: SectionWithCourse[], now: Date = 
     meetingsOf(s).forEach((m: Meeting, i) => {
       const days = parseDays(m.days)
       const startDate = m.start_date ?? term.start_date
-      const endDate = m.end_date ?? term.end_date
+      // Safety net (the importer already fixes known cases): a regular class that starts during the term
+      // stops at the last day of classes, even if Self-Service dated it through exam week. Exams, and
+      // anything that starts after classes end, keep their own dates.
+      const ownEnd = m.end_date ?? term.end_date
+      const cut = !isExam(m) && startDate <= term.end_date && ownEnd > term.end_date
+      const endDate = cut ? term.end_date : ownEnd
       const first = firstMeetingDate(startDate, days)
       if (!first || fmtDate(first) > endDate.replaceAll('-', '')) return
 

@@ -64,6 +64,26 @@ describe('buildIcs', () => {
     expect(out).not.toContain('EXDATE') // spring break is after the course ends
     expect(out).toContain('LOCATION:Taylor Science 1009')
   })
+  it('stops regular meetings at the last day of classes but keeps final exams after it', () => {
+    // term.end_date is 2027-05-07 here; Self-Service dated this lecture through exam week.
+    const out = unfold(buildIcs(term, [section({ meetings: [
+      { days: 'TR', start_time: '13:00', end_time: '14:15', type: 'LEC', start_date: '2027-01-20', end_date: '2027-05-17' },
+      { days: 'R', start_time: '09:00', end_time: '12:00', type: 'FINAL', start_date: '2027-05-12', end_date: '2027-05-17' },
+    ] })]))
+    expect(out).toContain('BYDAY=TU,TH;UNTIL=20270508T035959Z') // lecture: cut at May 7, not May 17
+    expect(out).not.toContain('BYDAY=TU,TH;UNTIL=20270518')     // the lecture doesn't run into exam week…
+    expect(out).toContain('DTSTART;TZID=America/New_York:20270513T090000') // …but the Thursday final stays
+    expect(out).toContain('BYDAY=TH;UNTIL=20270518T035959Z')
+  })
+  it('keeps exams under other spellings and meetings that start after classes end', () => {
+    const out = unfold(buildIcs(term, [section({ meetings: [
+      { days: 'R', start_time: '09:00', end_time: '12:00', type: 'Exam', start_date: '2027-05-12', end_date: '2027-05-17' },
+      { days: 'F', start_time: '14:00', end_time: '16:00', type: null, start_date: '2027-05-10', end_date: '2027-05-15' },
+    ] })]))
+    expect(out.match(/BEGIN:VEVENT/g)).toHaveLength(2)
+    expect(out).toContain('DTSTART;TZID=America/New_York:20270513T090000') // Thursday exam kept
+    expect(out).toContain('DTSTART;TZID=America/New_York:20270514T140000') // Friday session after classes kept
+  })
   it('folds long lines to 75 octets', () => {
     const long = buildIcs(term, [section({ course: { ...course, title: 'X'.repeat(200) } })])
     for (const line of long.split('\r\n')) expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75)
