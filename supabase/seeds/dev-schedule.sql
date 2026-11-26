@@ -20,6 +20,6 @@ begin
                            and sch.user_id = 'd0000000-0000-4000-8000-000000000001';
   get diagnostics added = row_count;
   if added <> 8 then
-    raise exception 'dev-schedule.sql: added % of 8 test classes; a picked section is missing from the catalog seed. Pick another section.', added;
+    raise exception 'dev-schedule.sql: added % of 8 test classes; either a picked section is missing from the catalog seed (pick another) or the test student has no "My Schedule" in that term (is the term active in seed.sql?).', added;
   end if;
 end $$;
