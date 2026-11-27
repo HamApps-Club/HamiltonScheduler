@@ -6,7 +6,7 @@ build up to three schedules per semester on a weekly calendar, and download a sc
 
 - **Front end:** React + Vite (TypeScript)
 - **Database:** Supabase (Postgres, Row Level Security)
-- **Sign-in:** Google, Hamilton accounts only, through our own `/api/auth` server (`infra/auth.ts`), which then signs the student in to Supabase
+- **Sign-in:** Google, through our own `/api/auth` server (`infra/auth.ts`), which then signs the student in to Supabase. The database lets in @hamilton.edu accounts plus a guest list (see [Guest sign-ins](#guest-sign-ins))
 - **Hosting:** AWS via SST (profile `hamapps`, region `us-east-2`) at https://scheduler.hamapps.dev; deploys automatically on every push to `main`
 
 ## Run it locally
@@ -86,6 +86,55 @@ Other kinds of filter (time of day, credits, …) go in that same list.
 
 Keep Self-Service's labels in the database and put friendly names in `label`, so the next catalog
 import keeps matching.
+
+## Guest sign-ins
+
+Who may sign in is decided by the live database, not the code: the trigger
+`private.enforce_hamilton_google()` on `auth.users` allows `@hamilton.edu` emails plus anyone in the
+guest list `private.allowed_emails`. Both were set up directly in Supabase, **not** by a migration in
+this repo, so a database rebuilt from `supabase/migrations` is Hamilton-only until the setup below is
+run again. Guest emails are never committed (this repo is public).
+
+Manage guests in Supabase → SQL Editor (production project). No code change or deploy is needed:
+
+```sql
+-- Add a guest (they choose "Use another account" on Google's screen)
+insert into private.allowed_emails (email, note) values ('someone@example.edu', 'why they have access');
+-- List guests
+select * from private.allowed_emails order by added_at;
+-- Remove a guest: stop new sign-ins, then end their account (Authentication → Users → delete)
+delete from private.allowed_emails where email = 'someone@example.edu';
+```
+
+<details><summary>One-time setup (already done on production; rerun if the database is rebuilt)</summary>
+
+```sql
+create table if not exists private.allowed_emails (
+  email    text primary key check (email = lower(email) and email like '%_@_%'),
+  note     text,
+  added_at timestamptz not null default now()
+);
+revoke all on private.allowed_emails from public, anon, authenticated;
+
+create or replace function private.enforce_hamilton_google() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if new.email is null or (
+       lower(new.email) !~ '^[^@]+@hamilton\.edu$'
+       and not exists (select 1 from private.allowed_emails a where a.email = lower(new.email))
+     ) then
+    raise exception 'Only @hamilton.edu accounts can sign in.'
+      using errcode = 'check_violation';
+  end if;
+  if tg_op = 'INSERT' and coalesce(new.raw_app_meta_data ->> 'provider', '') <> 'google' then
+    raise exception 'Please sign in with Google.'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end $$;
+```
+
+</details>
 
 ## Secrets
 

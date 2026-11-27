@@ -2,10 +2,14 @@
 //
 // Same method as HamEats (Auth.js): a full-page redirect to Google, and Google sends the student back
 // to OUR domain (https://scheduler.hamapps.dev/api/auth/callback/google), so Google's screen says
-// "to continue to scheduler.hamapps.dev". The server checks the account is a verified member of the
-// Hamilton Google Workspace (the `hd` claim), then hands the verified Google sign-in to Supabase
-// (grant_type=id_token), so the database's per-student rules keep working, and finally returns the
-// student to the app with the Supabase session in the URL fragment (never sent to any server).
+// "to continue to scheduler.hamapps.dev". The server checks Google's ID token is genuine, meant for us
+// and has a verified email, then hands it to Supabase (grant_type=id_token), so the database's
+// per-student rules keep working, and finally returns the student to the app with the Supabase session
+// in the URL fragment (never sent to any server).
+//
+// WHO may sign in is decided by the database, not here: the trigger private.enforce_hamilton_google()
+// on auth.users allows @hamilton.edu emails plus the guest list private.allowed_emails. Both were
+// changed directly in Supabase (not by a migration in this repo); see "Guest sign-ins" in the README.
 //
 //   GET /api/auth/signin/google[?return=/path]   → redirect to Google
 //   GET /api/auth/callback/google?code&state     → verify, sign in to Supabase, redirect to the app
@@ -83,20 +87,18 @@ export function jwtPayload(token: string): Record<string, unknown> {
 }
 
 /**
- * Whether Google's ID token is a verified account in the Hamilton Workspace (same rule as HamEats):
- * only the domain's own accounts carry hd=hamilton.edu, so a personal Google account that merely uses
- * a hamilton.edu address can't pass.
+ * Whether Google's ID token is a genuine sign-in to this app with a verified email: from Google, for our
+ * client id, not expired, and for this sign-in attempt (nonce). It does not check the email's domain:
+ * the database decides who may sign in (Hamilton emails plus its guest list), so guests need no deploy.
  */
-export function isHamiltonAccount(c: Record<string, unknown>, clientId: string, hashedNonce: string): boolean {
+export function isValidGoogleSignIn(c: Record<string, unknown>, clientId: string, hashedNonce: string): boolean {
   return (
     (c.iss === 'https://accounts.google.com' || c.iss === 'accounts.google.com') &&
     c.aud === clientId &&
     typeof c.exp === 'number' && c.exp * 1000 > Date.now() &&
     c.nonce === hashedNonce &&
-    c.hd === LOGIN_DOMAIN &&
     c.email_verified === true &&
-    typeof c.email === 'string' &&
-    c.email.toLowerCase().endsWith(`@${LOGIN_DOMAIN}`)
+    typeof c.email === 'string'
   )
 }
 
@@ -124,7 +126,7 @@ export function startSignIn(env: Env, ret: string | undefined, now = Date.now())
     nonce: sha256(nonce).toString('hex'),
     code_challenge: b64url(sha256(verifier)),
     code_challenge_method: 'S256',
-    hd: LOGIN_DOMAIN, // Google offers Hamilton accounts first; the real check is isHamiltonAccount()
+    hd: LOGIN_DOMAIN, // Google offers Hamilton accounts first (guests pick "Use another account"); the database decides who gets in
     prompt: 'select_account',
   })
   const cookie = sealCookie({ state, verifier, nonce, ret: safeReturn(ret), exp: now + COOKIE_MAX_AGE * 1000 }, env.AUTH_COOKIE_SECRET)
@@ -155,13 +157,14 @@ export async function finishSignIn(env: Env, event: UrlEvent): Promise<UrlResult
   const tokens = (await tokenRes.json()) as { id_token?: string; error?: string }
   if (!tokenRes.ok || !tokens.id_token) return backWithError(env, 'Google sign-in failed. Please try again.')
 
-  // 2. Only verified Hamilton Workspace accounts.
+  // 2. Only genuine sign-ins to this app with a verified email.
   const claims = jwtPayload(tokens.id_token)
-  if (!isHamiltonAccount(claims, env.GOOGLE_CLIENT_ID, sha256(pending.nonce).toString('hex'))) {
-    return backWithError(env, `Please sign in with your @${LOGIN_DOMAIN} Google account.`)
+  if (!isValidGoogleSignIn(claims, env.GOOGLE_CLIENT_ID, sha256(pending.nonce).toString('hex'))) {
+    return backWithError(env, 'Google sign-in failed. Please try again.')
   }
 
-  // 3. Hand the verified Google sign-in to Supabase (it re-verifies the token's signature).
+  // 3. Hand the verified Google sign-in to Supabase (it re-verifies the token's signature). Its trigger
+  //    private.enforce_hamilton_google() refuses anyone who isn't @hamilton.edu or on the guest list.
   const sbRes = await fetch(`${env.SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
     method: 'POST',
     headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
