@@ -8,8 +8,9 @@
 // in the URL fragment (never sent to any server).
 //
 // WHO may sign in is decided by the database, not here: the trigger private.enforce_hamilton_google()
-// on auth.users allows @hamilton.edu emails plus the guest list private.allowed_emails. Both were
-// changed directly in Supabase (not by a migration in this repo); see "Guest sign-ins" in the README.
+// on auth.users allows @hamilton.edu emails, the guest list private.allowed_emails and any school domain
+// in private.allowed_domains. All were changed directly in Supabase (not by a migration in this repo);
+// see "Guest sign-ins" in the README.
 //
 //   GET /api/auth/signin/google[?return=/path]   → redirect to Google
 //   GET /api/auth/callback/google?code&state     → verify, sign in to Supabase, redirect to the app
@@ -164,7 +165,7 @@ export async function finishSignIn(env: Env, event: UrlEvent): Promise<UrlResult
   }
 
   // 3. Hand the verified Google sign-in to Supabase (it re-verifies the token's signature). Its trigger
-  //    private.enforce_hamilton_google() refuses anyone who isn't @hamilton.edu or on the guest list.
+  //    private.enforce_hamilton_google() refuses anyone who isn't @hamilton.edu, a guest or at an allowed domain.
   const sbRes = await fetch(`${env.SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
     method: 'POST',
     headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },

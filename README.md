@@ -6,7 +6,7 @@ build up to three schedules per semester on a weekly calendar, and download a sc
 
 - **Front end:** React + Vite (TypeScript)
 - **Database:** Supabase (Postgres, Row Level Security)
-- **Sign-in:** Google, through our own `/api/auth` server (`infra/auth.ts`), which then signs the student in to Supabase. The database lets in @hamilton.edu accounts plus a guest list (see [Guest sign-ins](#guest-sign-ins))
+- **Sign-in:** Google, through our own `/api/auth` server (`infra/auth.ts`), which then signs the student in to Supabase. The database lets in @hamilton.edu accounts plus a guest list and any extra school domains (see [Guest sign-ins](#guest-sign-ins))
 - **Hosting:** AWS via SST (profile `hamapps`, region `us-east-2`) at https://scheduler.hamapps.dev; deploys automatically on every push to `main`
 
 ## Run it locally
@@ -90,10 +90,11 @@ import keeps matching.
 ## Guest sign-ins
 
 Who may sign in is decided by the live database, not the code: the trigger
-`private.enforce_hamilton_google()` on `auth.users` allows `@hamilton.edu` emails plus anyone in the
-guest list `private.allowed_emails`. Both were set up directly in Supabase, **not** by a migration in
-this repo, so a database rebuilt from `supabase/migrations` is Hamilton-only until the setup below is
-run again. Guest emails are never committed (this repo is public).
+`private.enforce_hamilton_google()` on `auth.users` allows `@hamilton.edu` emails, anyone in the
+guest list `private.allowed_emails`, and every email at a school domain in `private.allowed_domains`.
+All of these were set up directly in Supabase, **not** by a migration in this repo, so a database
+rebuilt from `supabase/migrations` is Hamilton-only until the setup below is run again. Guest emails
+and extra domains are never committed (this repo is public).
 
 Manage guests in Supabase → SQL Editor (production project). No code change or deploy is needed:
 
@@ -104,6 +105,12 @@ insert into private.allowed_emails (email, note) values ('someone@example.edu', 
 select * from private.allowed_emails order by added_at;
 -- Remove a guest: stop new sign-ins, then end their account (Authentication → Users → delete)
 delete from private.allowed_emails where email = 'someone@example.edu';
+
+-- Let in a whole school (every verified email at that domain)
+insert into private.allowed_domains (domain, note) values ('example.edu', 'why they have access');
+-- List / remove extra domains
+select * from private.allowed_domains order by added_at;
+delete from private.allowed_domains where domain = 'example.edu';
 ```
 
 <details><summary>One-time setup (already done on production; rerun if the database is rebuilt)</summary>
@@ -116,12 +123,23 @@ create table if not exists private.allowed_emails (
 );
 revoke all on private.allowed_emails from public, anon, authenticated;
 
+create table if not exists private.allowed_domains (
+  domain   text primary key check (domain = lower(domain) and domain ~ '^[a-z0-9-]+(\.[a-z0-9-]+)+$'),
+  note     text,
+  added_at timestamptz not null default now()
+);
+revoke all on private.allowed_domains from public, anon, authenticated;
+
 create or replace function private.enforce_hamilton_google() returns trigger
-language plpgsql set search_path = '' as $$
+language plpgsql security definer set search_path = '' as $$
 begin
   if new.email is null or (
        lower(new.email) !~ '^[^@]+@hamilton\.edu$'
        and not exists (select 1 from private.allowed_emails a where a.email = lower(new.email))
+       and not (
+         lower(new.email) ~ '^[^@]+@[^@]+$'
+         and exists (select 1 from private.allowed_domains d where d.domain = split_part(lower(new.email), '@', 2))
+       )
      ) then
     raise exception 'Only @hamilton.edu accounts can sign in.'
       using errcode = 'check_violation';
