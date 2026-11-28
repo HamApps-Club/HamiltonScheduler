@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../lib/api'
 import { buildIcs, downloadIcs } from '../lib/ics'
 import { applyMode, applyPaletteUi, initialMode, loadPref, PALETTES, savePref, type Mode } from '../lib/theme'
@@ -15,6 +15,8 @@ export default function Planner() {
   const [catalog, setCatalog] = useState<Course[]>([])
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [scheduleId, setScheduleId] = useState<number | null>(null)
+  const scheduleIdRef = useRef<number | null>(null) // the schedule on screen, for background saves that finish later
+  scheduleIdRef.current = scheduleId
   const [sectionIds, setSectionIds] = useState<number[]>([])
   const [detailId, setDetailId] = useState<number | null>(null)
   const [previewCourse, setPreviewCourse] = useState<Course | null>(null)
@@ -124,29 +126,44 @@ export default function Planner() {
   const term = terms.find((t) => t.id === termId) ?? null
   const schedule = schedules.find((s) => s.id === scheduleId) ?? null
 
-  async function addSectionById(id: number) {
-    if (!scheduleId || sectionIds.includes(id)) return
-    await run(async () => { await api.addSection(scheduleId, id); setSectionIds((ids) => [...ids, id]) })
-  }
-  async function removeSectionById(id: number) {
+  /**
+   * Change the schedule on screen right away, then save to the database in the background.
+   * If saving fails, undo the change (unless the student has moved to another schedule meanwhile)
+   * and show the error.
+   */
+  function changeSections(added: number[], removed: number[], save: (scheduleId: number) => Promise<void>) {
     if (!scheduleId) return
-    await run(async () => { await api.removeSection(scheduleId, id); setSectionIds((ids) => ids.filter((x) => x !== id)) })
+    const target = scheduleId
+    const apply = (ids: number[], add: number[], drop: number[]) => [...ids.filter((x) => !drop.includes(x) && !add.includes(x)), ...add]
+    setError(null)
+    setSectionIds((ids) => apply(ids, added, removed))
+    save(target).catch((e) => {
+      if (scheduleIdRef.current === target) setSectionIds((ids) => apply(ids, removed, added))
+      setError(`Couldn't save that change: ${api.friendlyError(e)}`)
+    })
+  }
+
+  function addSectionById(id: number) {
+    if (sectionIds.includes(id)) return
+    changeSections([id], [], (sid) => api.addSection(sid, id))
+  }
+  function removeSectionById(id: number) {
+    changeSections([], [id], (sid) => api.removeSections(sid, [id]))
   }
 
   /** Add a course: its first open (non-canceled) section. Other sections can be chosen from Details. */
-  async function addCourse(course: Course) {
+  function addCourse(course: Course) {
     const s = course.sections.find((x) => x.status === 'open') ?? course.sections.find((x) => x.status !== 'canceled')
     if (!s) return setNotice(`${course.code} has no available sections.`)
-    await addSectionById(s.id)
+    addSectionById(s.id)
   }
   /** Replace whichever section of `course` is on the schedule with `newId`. */
-  async function switchSection(course: Course, newId: number) {
-    if (!scheduleId) return
-    const old = sectionIds.filter((id) => sectionsById.get(id)?.course.id === course.id)
-    await run(async () => {
-      await api.addSection(scheduleId, newId)
-      for (const id of old) await api.removeSection(scheduleId, id)
-      setSectionIds((all) => [...all.filter((x) => !old.includes(x)), newId])
+  function switchSection(course: Course, newId: number) {
+    const old = sectionIds.filter((id) => sectionsById.get(id)?.course.id === course.id && id !== newId)
+    // Add the new section before removing the old one, so a failure never leaves the course off the schedule.
+    changeSections([newId], old, async (sid) => {
+      await api.addSection(sid, newId)
+      await api.removeSections(sid, old)
     })
   }
 
@@ -166,13 +183,9 @@ export default function Planner() {
     else setDetailId(id)
   }
 
-  async function removeCourse(course: Course) {
-    if (!scheduleId) return
+  function removeCourse(course: Course) {
     const ids = sectionIds.filter((id) => sectionsById.get(id)?.course.id === course.id)
-    await run(async () => {
-      for (const id of ids) await api.removeSection(scheduleId, id)
-      setSectionIds((all) => all.filter((x) => !ids.includes(x)))
-    })
+    changeSections([], ids, (sid) => api.removeSections(sid, ids))
   }
 
   async function newSchedule() {

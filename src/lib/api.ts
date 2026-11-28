@@ -70,6 +70,8 @@ export async function addSection(scheduleId: number, sectionId: number): Promise
   check(await supabase.from('schedule_sections').insert({ schedule_id: scheduleId, section_id: sectionId }))
 }
 
-export async function removeSection(scheduleId: number, sectionId: number): Promise<void> {
-  check(await supabase.from('schedule_sections').delete().eq('schedule_id', scheduleId).eq('section_id', sectionId))
+/** Remove several sections from a schedule in one request (e.g. a lecture and its lab). */
+export async function removeSections(scheduleId: number, sectionIds: number[]): Promise<void> {
+  if (sectionIds.length === 0) return
+  check(await supabase.from('schedule_sections').delete().eq('schedule_id', scheduleId).in('section_id', sectionIds))
 }
