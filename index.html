@@ -22,11 +22,12 @@
         if (ui) document.documentElement.dataset.palette = ui
       } catch (e) {}
     </script>
-    <title>Hamilton Scheduler</title>
+    <title>Hamilton Scheduler · Hamilton College Course Planner by HamApps</title>
     <meta
       name="description"
       content="Plan your Hamilton College semester: search the course catalog, build schedules on a weekly calendar, and export them to your calendar."
     />
+    <link rel="canonical" href="https://scheduler.hamapps.dev/" />
     <!-- How links to the site look when shared (iMessage, Discord, Instagram, etc.) -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://scheduler.hamapps.dev/" />
@@ -40,7 +41,37 @@
     <meta property="og:image:height" content="1200" />
     <meta property="og:image:alt" content="Hamilton Scheduler logo: the HamApps box cat inside a calendar" />
     <meta property="og:site_name" content="HamApps" />
+    <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary" />
+    <!-- Tells search engines this app is made by HamApps. The "#organization" id matches the one on
+         hamapps.dev (and HamEats), so Google ties the club's sites together. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "@id": "https://scheduler.hamapps.dev/#app",
+            "name": "Hamilton Scheduler",
+            "alternateName": ["Hamilton College Scheduler", "HamApps Scheduler"],
+            "url": "https://scheduler.hamapps.dev/",
+            "image": "https://scheduler.hamapps.dev/og-image.png",
+            "applicationCategory": "EducationalApplication",
+            "operatingSystem": "Web",
+            "description": "Plan your Hamilton College semester: search the course catalog, build schedules on a weekly calendar, and export them to your calendar.",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "publisher": { "@id": "https://hamapps.dev/#organization" }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://hamapps.dev/#organization",
+            "name": "HamApps",
+            "url": "https://hamapps.dev/",
+            "logo": "https://hamapps.dev/hamapps-logo.png"
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
