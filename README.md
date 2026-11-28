@@ -54,7 +54,9 @@ maintainer's computer; see `scripts/README.md` there.
 No database access needed: the local seed has the full real catalogs, and filters run in the
 browser on the semester's loaded courses.
 
-The chips under the search box (Writing Intensive, Quantitative, First Year, …) come from
+All filters live in the **Filters** panel (the button next to the search box, `src/components/FiltersPanel.tsx`);
+the ones that are on show as a removable line under the search box. The course-type chips (Writing Intensive,
+Quantitative, First Year, Phys Ed, …) come from
 `TYPE_FILTERS` in `src/lib/filters.ts`. **To add a course-type filter, add one line there**; the chip,
 the filtering and the empty-search browsing all follow from it:
 
@@ -83,7 +85,9 @@ Each section has `types`: the course types from Self-Service. Labels are Self-Se
 
 Types are per **section** (e.g. only one MATH 113 section is first-years only), so filters keep the
 sections that match (`src/components/Sidebar.tsx`, the `results` list).
-Other kinds of filter (time of day, credits, …) go in that same list.
+Day/time (`matchesWhen`: days off, start after, end by; final exams ignored, sections with no set time pass),
+level and "no prerequisites listed" (`matchesCourse`) are in the same file; a new kind of filter goes there,
+in `SearchFilters`, and gets a control in the panel and a label in `FilterSummary`.
 
 Keep Self-Service's labels in the database and put friendly names in `label`, so the next catalog
 import keeps matching.

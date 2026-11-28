@@ -44,3 +44,4 @@ export const ListIcon = () => <Icon><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 1
 export const LogoMark = () => (
   <img src="/favicon.svg" width="38" height="38" alt="" aria-hidden="true" className="logo-mark" />
 )
+export const FilterIcon = () => <Icon><path d="M4 6h16M7 12h10M10 18h4" /></Icon>

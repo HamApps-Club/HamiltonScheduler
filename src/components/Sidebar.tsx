@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { conflictsWithAny } from '../lib/time'
-import { TYPE_FILTERS, cycleFilter, matchesTypes, type TypeFilters } from '../lib/filters'
+import { activeCount, matchesCourse, matchesTypes, matchesWhen, NO_FILTERS, type SearchFilters } from '../lib/filters'
 import type { LabIndex } from '../lib/labs'
 import { darken } from '../lib/theme'
 import type { Course, Section, SectionWithCourse } from '../lib/types'
 import { BookIcon, ChevronsDownIcon, InfoIcon, MinusIcon, PlusIcon, ShareIcon } from './Icons'
 import Requisite from './Requisite'
+import { FilterSummary, FiltersButton } from './FiltersPanel'
 
 /** A course card: the class plus its lab (`courseIds` lists both), in one color. */
 export interface SavedCourse { course: Course; color: string; sections: SectionWithCourse[]; courseIds: number[] }
@@ -68,30 +69,32 @@ export default function Sidebar(p: Props) {
   const { query, onQuery: setQuery } = p
   const [noConflicts, setNoConflicts] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
-  const [typeFilters, setTypeFilters] = useState<TypeFilters>(new Map())
+  const [filters, setFilters] = useState<SearchFilters>(NO_FILTERS)
+  const anyFilter = activeCount(filters) > 0
 
   const savedIds = useMemo(() => new Set(p.saved.flatMap((s) => s.courseIds)), [p.saved])
   const labsOf = (c: Course) => p.labs.labsOf.get(c.id) ?? []
 
-  // With a type filter on, an empty search lists every matching course.
-  const showResults = query.trim() !== '' || typeFilters.size > 0
+  // With a filter on, an empty search lists every matching course.
+  const showResults = query.trim() !== '' || anyFilter
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q && typeFilters.size === 0) return []
-    const fits = (s: Section) => !noConflicts || !conflictsWithAny(s, p.scheduled)
+    if (!q && !anyFilter) return []
+    // A section (or lab time) fits when it passes the day/time filters and, with "No Conflicts", clashes with nothing saved.
+    const fits = (s: Section) => matchesWhen(s, filters) && (!noConflicts || !conflictsWithAny(s, p.scheduled))
     return p.courses.filter((c) => {
       // Labs that belong to a class are shown inside that class's card, not on their own.
       if (savedIds.has(c.id) || p.labs.classesOf.has(c.id)) return false
       const labs = p.labs.labsOf.get(c.id) ?? []
       if (q && !matches(c, labs, q)) return false
-      let secs = available(c)
-      if (typeFilters.size) secs = secs.filter((s) => matchesTypes(s, typeFilters))
+      if (!matchesCourse(c, filters)) return false
+      const secs = available(c).filter((s) => matchesTypes(s, filters.types))
       if (!secs.some(fits)) return false
-      // "No Conflicts": a class with a lab also needs a lab time that fits.
+      // A class with a lab also needs a lab time that fits.
       return labs.every((l) => savedIds.has(l.id) || available(l).some(fits))
     })
-  }, [query, p.courses, p.scheduled, p.labs, savedIds, noConflicts, typeFilters])
+  }, [query, p.courses, p.scheduled, p.labs, savedIds, noConflicts, filters, anyFilter])
 
   const firstSectionId = (c: Course) => (available(c)[0] ?? c.sections[0])?.id
   const search = (code: string) => { setQuery(code); setExpanded(null) }
@@ -105,22 +108,9 @@ export default function Sidebar(p: Props) {
 
       <div className="search-row">
         <input type="search" placeholder="Search..." value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search courses" />
+        <FiltersButton filters={filters} onChange={setFilters} />
       </div>
-
-      <div className="chips" role="group" aria-label="Course type filters: click once to show only, twice to hide, three times to turn off">
-        {TYPE_FILTERS.map((f) => {
-          const state = typeFilters.get(f.id)
-          return (
-            <button key={f.id} className={`chip${state === 'include' ? ' active' : ''}${state === 'exclude' ? ' excluded' : ''}`}
-              aria-label={`${f.label}: ${state === 'include' ? 'showing only these' : state === 'exclude' ? 'hiding these' : 'off'}`}
-              title={state === 'include' ? 'Click again to hide these instead' : state === 'exclude' ? 'Click again to turn off' : 'Click to show only these; twice to hide them'}
-              onClick={() => setTypeFilters((prev) => cycleFilter(prev, f.id))}>
-              {state === 'exclude' && <span aria-hidden="true">✕ </span>}{f.label}
-            </button>
-          )
-        })}
-        {typeFilters.size > 0 && <button className="chip clear" onClick={() => setTypeFilters(new Map())}>Clear</button>}
-      </div>
+      <FilterSummary filters={filters} onChange={setFilters} />
 
       <div className="side-head">
         <h3>0 Custom Events</h3>
