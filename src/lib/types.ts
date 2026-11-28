@@ -50,6 +50,9 @@ export interface Course {
   description: string | null
   cross_listed: string[]
   catalog_url: string | null
+  /** From the course's catalogue page, e.g. "CHEM 120"; null if none listed (or not scraped yet). */
+  prerequisites?: string | null
+  corequisites?: string | null
   sections: Section[]
 }
 

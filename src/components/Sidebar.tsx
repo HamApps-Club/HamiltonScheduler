@@ -1,14 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { conflictsWithAny } from '../lib/time'
-import { TYPE_FILTERS, matchesTypes, type TypeFilterId } from '../lib/filters'
+import { TYPE_FILTERS, cycleFilter, matchesTypes, type TypeFilters } from '../lib/filters'
+import type { LabIndex } from '../lib/labs'
 import { darken } from '../lib/theme'
-import type { Course, SectionWithCourse } from '../lib/types'
-import { BookIcon, ChevronsDownIcon, GearIcon, InfoIcon, MinusIcon, PlusIcon, ShareIcon } from './Icons'
+import type { Course, Section, SectionWithCourse } from '../lib/types'
+import { BookIcon, ChevronsDownIcon, InfoIcon, MinusIcon, PlusIcon, ShareIcon } from './Icons'
+import Requisite from './Requisite'
 
-export interface SavedCourse { course: Course; color: string; sections: SectionWithCourse[] }
+/** A course card: the class plus its lab (`courseIds` lists both), in one color. */
+export interface SavedCourse { course: Course; color: string; sections: SectionWithCourse[]; courseIds: number[] }
 
 interface Props {
   courses: Course[]
+  labs: LabIndex
+  query: string
+  onQuery: (q: string) => void
   saved: SavedCourse[]
   scheduled: SectionWithCourse[]
   canEdit: boolean
@@ -22,15 +28,30 @@ interface Props {
 
 const MAX_RESULTS = 100
 
-function matches(course: Course, q: string): boolean {
-  const hay = [course.code, course.code.replace(/\s+/g, ''), course.title, course.department ?? '',
-    ...course.cross_listed, ...course.sections.flatMap((s) => s.instructors)].join(' ').toLowerCase()
+const available = (c: Course) => c.sections.filter((s) => s.status !== 'canceled')
+
+function matches(course: Course, labs: Course[], q: string): boolean {
+  const codes = [course.code, ...course.cross_listed, ...labs.map((l) => l.code)]
+  const hay = [...codes, ...codes.map((c) => c.replace(/\s+/g, '')), course.title, course.department ?? '',
+    ...course.sections.flatMap((s) => s.instructors)].join(' ').toLowerCase()
   return q.split(/\s+/).every((word) => hay.includes(word))
 }
 
-function CourseLinks({ course, onDetails }: { course: Course; onDetails: () => void }) {
+/** "Includes lab" line under a card's title. */
+function LabNote({ labs }: { labs: Course[] }) {
+  if (!labs.length) return null
+  return <span className="card-lab">Includes lab: {labs.map((l) => l.code).join(', ')}</span>
+}
+
+function CourseLinks({ course, onDetails, onSearch }: { course: Course; onDetails: () => void; onSearch: (q: string) => void }) {
   return (
     <>
+      {(course.prerequisites || course.corequisites) && (
+        <div className="card-reqs">
+          {course.prerequisites && <p><strong>Prerequisites:</strong> <Requisite text={course.prerequisites} onSearch={onSearch} /></p>}
+          {course.corequisites && <p><strong>Corequisites:</strong> <Requisite text={course.corequisites} onSearch={onSearch} /></p>}
+        </div>
+      )}
       <button className="card-link" onClick={onDetails}><span>Details</span><InfoIcon /></button>
       {course.catalog_url ? (
         <a className="card-link" href={course.catalog_url} target="_blank" rel="noreferrer">
@@ -44,47 +65,36 @@ function CourseLinks({ course, onDetails }: { course: Course; onDetails: () => v
 }
 
 export default function Sidebar(p: Props) {
-  const [query, setQuery] = useState('')
+  const { query, onQuery: setQuery } = p
   const [noConflicts, setNoConflicts] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [hideCanceled, setHideCanceled] = useState(true)
-  const [hideClosed, setHideClosed] = useState(false)
   const [expanded, setExpanded] = useState<number | null>(null)
-  const [typeFilters, setTypeFilters] = useState<ReadonlySet<TypeFilterId>>(new Set())
-  const settingsRef = useRef<HTMLDivElement>(null)
+  const [typeFilters, setTypeFilters] = useState<TypeFilters>(new Map())
 
-  useEffect(() => {
-    if (!settingsOpen) return
-    const close = (e: MouseEvent) => { if (!settingsRef.current?.contains(e.target as Node)) setSettingsOpen(false) }
-    document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [settingsOpen])
+  const savedIds = useMemo(() => new Set(p.saved.flatMap((s) => s.courseIds)), [p.saved])
+  const labsOf = (c: Course) => p.labs.labsOf.get(c.id) ?? []
 
-  const savedIds = useMemo(() => new Set(p.saved.map((s) => s.course.id)), [p.saved])
-
-  const toggleType = (id: TypeFilterId) => setTypeFilters((prev) => {
-    const next = new Set(prev)
-    if (!next.delete(id)) next.add(id)
-    return next
-  })
   // With a type filter on, an empty search lists every matching course.
   const showResults = query.trim() !== '' || typeFilters.size > 0
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q && typeFilters.size === 0) return []
+    const fits = (s: Section) => !noConflicts || !conflictsWithAny(s, p.scheduled)
     return p.courses.filter((c) => {
-      if (savedIds.has(c.id) || (q && !matches(c, q))) return false
-      let secs = c.sections
-      if (hideCanceled) secs = secs.filter((s) => s.status !== 'canceled')
-      if (hideClosed) secs = secs.filter((s) => s.status !== 'closed')
+      // Labs that belong to a class are shown inside that class's card, not on their own.
+      if (savedIds.has(c.id) || p.labs.classesOf.has(c.id)) return false
+      const labs = p.labs.labsOf.get(c.id) ?? []
+      if (q && !matches(c, labs, q)) return false
+      let secs = available(c)
       if (typeFilters.size) secs = secs.filter((s) => matchesTypes(s, typeFilters))
-      if (noConflicts) secs = secs.filter((s) => !conflictsWithAny(s, p.scheduled))
-      return secs.length > 0
+      if (!secs.some(fits)) return false
+      // "No Conflicts": a class with a lab also needs a lab time that fits.
+      return labs.every((l) => savedIds.has(l.id) || available(l).some(fits))
     })
-  }, [query, p.courses, p.scheduled, savedIds, noConflicts, hideCanceled, hideClosed, typeFilters])
+  }, [query, p.courses, p.scheduled, p.labs, savedIds, noConflicts, typeFilters])
 
-  const firstSectionId = (c: Course) => (c.sections.find((s) => s.status !== 'canceled') ?? c.sections[0])?.id
+  const firstSectionId = (c: Course) => (available(c)[0] ?? c.sections[0])?.id
+  const search = (code: string) => { setQuery(code); setExpanded(null) }
 
   return (
     <aside className="side" aria-label="Courses">
@@ -95,27 +105,21 @@ export default function Sidebar(p: Props) {
 
       <div className="search-row">
         <input type="search" placeholder="Search..." value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search courses" />
-        <div className="menu-wrap" ref={settingsRef}>
-          <button className="icon-btn" onClick={() => setSettingsOpen((o) => !o)} aria-label="Search settings" aria-expanded={settingsOpen}>
-            <GearIcon />
-          </button>
-          {settingsOpen && (
-            <div className="menu right">
-              <label className="menu-check"><input type="checkbox" checked={hideCanceled} onChange={(e) => setHideCanceled(e.target.checked)} /> Hide canceled</label>
-              <label className="menu-check"><input type="checkbox" checked={hideClosed} onChange={(e) => setHideClosed(e.target.checked)} /> Hide closed</label>
-            </div>
-          )}
-        </div>
       </div>
 
-      <div className="chips" role="group" aria-label="Course type filters">
-        {TYPE_FILTERS.map((f) => (
-          <button key={f.id} className={typeFilters.has(f.id) ? 'chip active' : 'chip'}
-            aria-pressed={typeFilters.has(f.id)} onClick={() => toggleType(f.id)}>
-            {f.label}
-          </button>
-        ))}
-        {typeFilters.size > 0 && <button className="chip clear" onClick={() => setTypeFilters(new Set())}>Clear</button>}
+      <div className="chips" role="group" aria-label="Course type filters: click once to show only, twice to hide, three times to turn off">
+        {TYPE_FILTERS.map((f) => {
+          const state = typeFilters.get(f.id)
+          return (
+            <button key={f.id} className={`chip${state === 'include' ? ' active' : ''}${state === 'exclude' ? ' excluded' : ''}`}
+              aria-label={`${f.label}: ${state === 'include' ? 'showing only these' : state === 'exclude' ? 'hiding these' : 'off'}`}
+              title={state === 'include' ? 'Click again to hide these instead' : state === 'exclude' ? 'Click again to turn off' : 'Click to show only these; twice to hide them'}
+              onClick={() => setTypeFilters((prev) => cycleFilter(prev, f.id))}>
+              {state === 'exclude' && <span aria-hidden="true">✕ </span>}{f.label}
+            </button>
+          )
+        })}
+        {typeFilters.size > 0 && <button className="chip clear" onClick={() => setTypeFilters(new Map())}>Clear</button>}
       </div>
 
       <div className="side-head">
@@ -139,12 +143,13 @@ export default function Sidebar(p: Props) {
                 <button className="card-body" onClick={() => setExpanded(open ? null : course.id)} aria-expanded={open}>
                   <span className="card-code">{[course.code, ...course.cross_listed].join(' / ')}</span>
                   <span className="card-title">{course.title}</span>
+                  <LabNote labs={[...new Map(sections.filter((s) => s.course.id !== course.id).map((s) => [s.course.id, s.course])).values()]} />
                 </button>
                 <button className="card-act" onClick={() => p.onRemove(course)} disabled={!p.canEdit} aria-label={`Remove ${course.code}`}>
                   <MinusIcon />
                 </button>
               </div>
-              {open && <CourseLinks course={course} onDetails={() => p.onDetails(sections[0]?.id ?? firstSectionId(course)!)} />}
+              {open && <CourseLinks course={course} onSearch={search} onDetails={() => p.onDetails(sections[0]?.id ?? firstSectionId(course)!)} />}
             </li>
           )
         })}
@@ -164,12 +169,13 @@ export default function Sidebar(p: Props) {
                     <button className="card-body" onClick={() => setExpanded(open ? null : course.id)} aria-expanded={open}>
                       <span className="card-code">{[course.code, ...course.cross_listed].join(' / ')}</span>
                       <span className="card-title">{course.title}</span>
+                      <LabNote labs={labsOf(course)} />
                     </button>
                     <button className="card-act" onClick={() => { p.onPreview(null); p.onAdd(course) }} disabled={!p.canEdit} aria-label={`Add ${course.code}`}>
                       <PlusIcon />
                     </button>
                   </div>
-                  {open && <CourseLinks course={course} onDetails={() => p.onDetails(firstSectionId(course)!)} />}
+                  {open && <CourseLinks course={course} onSearch={search} onDetails={() => p.onDetails(firstSectionId(course)!)} />}
                 </li>
               )
             })}

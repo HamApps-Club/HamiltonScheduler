@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../lib/api'
 import { buildIcs, downloadIcs } from '../lib/ics'
+import { indexLabs, isLabCourse } from '../lib/labs'
 import { applyMode, applyPaletteUi, initialMode, loadPref, PALETTES, savePref, type Mode } from '../lib/theme'
 import { MAX_SCHEDULES_PER_TERM, type Course, type Schedule, type SectionWithCourse, type Term } from '../lib/types'
 import Header from './Header'
@@ -21,6 +22,8 @@ export default function Planner() {
   const [detailId, setDetailId] = useState<number | null>(null)
   const [previewCourse, setPreviewCourse] = useState<Course | null>(null)
   const [pickCourseId, setPickCourseId] = useState<number | null>(null) // choosing another section of this course
+  const [adding, setAdding] = useState<Adding | null>(null) // adding a course: choosing its section (then lab) first
+  const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>(initialMode)
@@ -59,7 +62,7 @@ export default function Planner() {
   useEffect(() => {
     if (!termId) return
     let stale = false
-    setDetailId(null); setPickCourseId(null); setCatalog([]); setSchedules([]); setScheduleId(null)
+    setDetailId(null); setPickCourseId(null); setAdding(null); setCatalog([]); setSchedules([]); setScheduleId(null)
     run(async () => {
       const [c, s] = await Promise.all([api.fetchCatalog(termId), api.fetchSchedules(termId)])
       if (stale) return
@@ -72,6 +75,7 @@ export default function Planner() {
   useEffect(() => {
     setSectionIds([])
     setPickCourseId(null)
+    setAdding(null)
     if (!scheduleId) return
     let stale = false
     run(async () => {
@@ -92,36 +96,60 @@ export default function Planner() {
     [sectionIds, sectionsById],
   )
 
-  // Saved courses, in the order they were added, each with its palette color.
+  const labs = useMemo(() => indexLabs(catalog), [catalog])
+
+  // Saved courses, in the order they were added, each with its palette color. A lab joins its
+  // class's card (same color); a lab whose class isn't on the schedule gets a card of its own.
   const palette = PALETTES[paletteIndex] ?? PALETTES[0]
   const saved: SavedCourse[] = useMemo(() => {
     const out: SavedCourse[] = []
+    const add = (s: SectionWithCourse, group?: SavedCourse) => {
+      if (group) {
+        group.sections.push(s)
+        if (!group.courseIds.includes(s.course.id)) group.courseIds.push(s.course.id)
+      } else {
+        out.push({ course: s.course, color: palette.colors[out.length % palette.colors.length], sections: [s], courseIds: [s.course.id] })
+      }
+    }
+    const isAttachedLab = (s: SectionWithCourse) => labs.classesOf.has(s.course.id)
+    for (const s of scheduled) if (!isAttachedLab(s)) add(s, out.find((x) => x.course.id === s.course.id))
     for (const s of scheduled) {
-      const existing = out.find((x) => x.course.id === s.course.id)
-      if (existing) existing.sections.push(s)
-      else out.push({ course: s.course, color: palette.colors[out.length % palette.colors.length], sections: [s] })
+      if (!isAttachedLab(s)) continue
+      const classIds = labs.classesOf.get(s.course.id)!.map((c) => c.id)
+      add(s, out.find((x) => classIds.includes(x.course.id)) ?? out.find((x) => x.course.id === s.course.id))
     }
     return out
-  }, [scheduled, palette])
-  const colorOf = useCallback((courseId: number) => saved.find((x) => x.course.id === courseId)?.color ?? palette.colors[0], [saved, palette])
+  }, [scheduled, palette, labs])
+  const colorOf = useCallback(
+    (courseId: number) => saved.find((x) => x.courseIds.includes(courseId))?.color ?? palette.colors[saved.length % palette.colors.length],
+    [saved, palette],
+  )
 
   const pickCourse = pickCourseId ? catalog.find((c) => c.id === pickCourseId) ?? null : null
+  const addingCourse = adding ? adding.steps[adding.step] : null
+  // Sections already chosen while adding: shown solid, saved only when every choice is made.
+  const pending = useMemo(
+    () => (adding?.picked ?? []).map((id) => sectionsById.get(id)).filter((s): s is SectionWithCourse => !!s),
+    [adding, sectionsById],
+  )
 
-  // Faded blocks: the other sections of the course being switched, else the hovered search result.
+  // Faded blocks: the choices while adding a course, else the other sections of the course
+  // being switched, else the hovered search result (with its lab).
   const preview = useMemo(() => {
-    if (pickCourse) {
-      return pickCourse.sections.filter((s) => s.status !== 'canceled' && !sectionIds.includes(s.id)).map((s) => ({ ...s, course: pickCourse }))
-    }
-    return previewCourse ? previewCourse.sections.filter((s) => s.status !== 'canceled').map((s) => ({ ...s, course: previewCourse })) : []
-  }, [pickCourse, previewCourse, sectionIds])
+    const open = (c: Course, skip: number[] = []) => choicesOf(c).filter((s) => !skip.includes(s.id)).map((s) => ({ ...s, course: c }))
+    if (addingCourse) return open(addingCourse)
+    if (pickCourse) return open(pickCourse, sectionIds)
+    if (!previewCourse) return []
+    return [previewCourse, ...(labs.labsOf.get(previewCourse.id) ?? [])].flatMap((c) => open(c))
+  }, [addingCourse, pickCourse, previewCourse, sectionIds, labs])
 
-  // Esc leaves section-picking mode.
+  // Esc cancels adding (nothing is saved) or leaves section-switching mode.
   useEffect(() => {
-    if (!pickCourseId) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setPickCourseId(null)
+    if (!pickCourseId && !adding) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setAdding(null); setPickCourseId(null) } }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [pickCourseId])
+  }, [pickCourseId, adding])
 
   const term = terms.find((t) => t.id === termId) ?? null
   const schedule = schedules.find((s) => s.id === scheduleId) ?? null
@@ -143,19 +171,31 @@ export default function Planner() {
     })
   }
 
-  function addSectionById(id: number) {
-    if (sectionIds.includes(id)) return
-    changeSections([id], [], (sid) => api.addSection(sid, id))
-  }
   function removeSectionById(id: number) {
     changeSections([], [id], (sid) => api.removeSections(sid, [id]))
   }
 
-  /** Add a course: its first open (non-canceled) section. Other sections can be chosen from Details. */
-  function addCourse(course: Course) {
-    const s = course.sections.find((x) => x.status === 'open') ?? course.sections.find((x) => x.status !== 'canceled')
-    if (!s) return setNotice(`${course.code} has no available sections.`)
-    addSectionById(s.id)
+  /**
+   * Add a course: the student picks its section on the calendar, then its lab's. A step with only
+   * one choice is filled in automatically. Nothing is saved until the last choice (Esc cancels).
+   * `sectionId` skips the first step when a specific section was chosen (from Details).
+   */
+  function addCourse(course: Course, sectionId?: number) {
+    if (!choicesOf(course).length) return setNotice(`${course.code} has no sections this semester.`)
+    setPickCourseId(null); setPreviewCourse(null)
+    const onSchedule = (c: Course) => c.sections.some((s) => sectionIds.includes(s.id))
+    const labSteps = (labs.labsOf.get(course.id) ?? []).filter((l) => choicesOf(l).length && !onSchedule(l))
+    advance({ steps: [course, ...labSteps], step: sectionId ? 1 : 0, picked: sectionId ? [sectionId] : [] })
+  }
+  /** Fill in single-choice steps; save once every step is chosen, else wait for the student. */
+  function advance(a: Adding) {
+    let { step } = a
+    const picked = [...a.picked]
+    while (step < a.steps.length && choicesOf(a.steps[step]).length === 1) picked.push(choicesOf(a.steps[step++])[0].id)
+    if (step < a.steps.length) return setAdding({ ...a, step, picked })
+    setAdding(null)
+    const ids = picked.filter((id) => !sectionIds.includes(id))
+    if (ids.length) changeSections(ids, [], async (sid) => { for (const id of ids) await api.addSection(sid, id) })
   }
   /** Replace whichever section of `course` is on the schedule with `newId`. */
   function switchSection(course: Course, newId: number) {
@@ -172,6 +212,10 @@ export default function Planner() {
     const sec = sectionsById.get(id)
     if (!sec) return
     const course = sec.course
+    if (adding) {
+      if (course.id === addingCourse?.id) advance({ ...adding, step: adding.step + 1, picked: [...adding.picked, id] })
+      return
+    }
     if (pickCourseId === course.id) {
       setPickCourseId(null)
       if (sectionIds.includes(id)) setDetailId(id) // clicked the current section again
@@ -183,8 +227,10 @@ export default function Planner() {
     else setDetailId(id)
   }
 
+  /** Remove a saved course card: the class and its lab. */
   function removeCourse(course: Course) {
-    const ids = sectionIds.filter((id) => sectionsById.get(id)?.course.id === course.id)
+    const courseIds = saved.find((x) => x.course.id === course.id)?.courseIds ?? [course.id]
+    const ids = sectionIds.filter((id) => courseIds.includes(sectionsById.get(id)?.course.id ?? -1))
     changeSections([], ids, (sid) => api.removeSections(sid, ids))
   }
 
@@ -266,6 +312,9 @@ export default function Planner() {
       <main className="main">
         <Sidebar
           courses={catalog}
+          labs={labs}
+          query={query}
+          onQuery={setQuery}
           saved={saved}
           scheduled={scheduled}
           canEdit={!!scheduleId}
@@ -277,12 +326,20 @@ export default function Planner() {
           onExport={exportIcs}
         />
         <Calendar
-          sections={scheduled}
+          sections={[...scheduled, ...pending]}
           preview={preview}
-          pickingCourseId={pickCourseId}
+          pickingCourseId={addingCourse?.id ?? pickCourseId}
           colorOf={colorOf}
           onOpen={onBlockClick}
-          notice={pickCourse && (
+          notice={adding && addingCourse ? (
+            <div className="pick-bar" role="status">
+              {adding.steps.length > 1 && <span>Step {adding.step + 1} of {adding.steps.length}:</span>}
+              {isLabCourse(addingCourse) && adding.step > 0
+                ? <span>Now pick a lab time for <strong>{adding.steps[0].code}</strong> ({addingCourse.code}, {preview.length} options).</span>
+                : <span>Pick a section of <strong>{addingCourse.code}</strong> on the calendar ({preview.length} options).</span>}
+              <button className="link" onClick={() => setAdding(null)}>Cancel</button>
+            </div>
+          ) : pickCourse && (
             <div className="pick-bar" role="status">
               Pick a section of <strong>{pickCourse.code}</strong> ({preview.length} other{preview.length === 1 ? '' : 's'}) — click the current one for details, or press Esc.
               <button className="link" onClick={() => setPickCourseId(null)}>Done</button>
@@ -294,13 +351,31 @@ export default function Planner() {
       {detail && (
         <DetailsPanel
           section={detail}
+          labs={labs.labsOf.get(detail.course.id) ?? []}
+          onSearch={(q) => { setDetailId(null); setQuery(q) }}
           inSchedule={sectionIds.includes(detail.id)}
           conflicts={scheduled.filter((s) => s.id !== detail.id)}
           canAdd={!!scheduleId}
-          onToggle={() => (sectionIds.includes(detail.id) ? removeSectionById(detail.id) : addSectionById(detail.id))}
+          onToggle={() => {
+            if (sectionIds.includes(detail.id)) {
+              // Removing a class also removes its lab (the whole card); removing a lab removes just the lab.
+              const card = saved.find((x) => x.course.id === detail.course.id)
+              return card ? removeCourse(card.course) : removeSectionById(detail.id)
+            }
+            setDetailId(null)
+            addCourse(detail.course, detail.id)
+          }}
           onClose={() => setDetailId(null)}
         />
       )}
     </div>
   )
+}
+
+/** Adding a course: its steps (the class, then labs), which one is being chosen, and sections chosen so far. */
+interface Adding { steps: Course[]; step: number; picked: number[] }
+
+/** Sections a student can choose (canceled ones are hidden). */
+function choicesOf(c: Course) {
+  return c.sections.filter((s) => s.status !== 'canceled')
 }

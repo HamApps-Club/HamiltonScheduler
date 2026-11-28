@@ -17,7 +17,26 @@ export const TYPE_FILTERS = [
 
 export type TypeFilterId = (typeof TYPE_FILTERS)[number]['id']
 
-/** True if the section matches every chosen filter (no filters chosen: always true). */
-export function matchesTypes(section: Pick<Section, 'types'>, chosen: ReadonlySet<TypeFilterId>): boolean {
-  return TYPE_FILTERS.every((f) => !chosen.has(f.id) || f.types.some((t) => section.types.includes(t)))
+/** A chip is off (not in the map), "include" (only these) or "exclude" (hide these). */
+export type FilterState = 'include' | 'exclude'
+export type TypeFilters = ReadonlyMap<TypeFilterId, FilterState>
+
+/** Clicking a chip cycles: off -> include -> exclude -> off. */
+export function cycleFilter(filters: TypeFilters, id: TypeFilterId): TypeFilters {
+  const next = new Map(filters)
+  const now = filters.get(id)
+  if (!now) next.set(id, 'include')
+  else if (now === 'include') next.set(id, 'exclude')
+  else next.delete(id)
+  return next
+}
+
+/** True if the section has every included type and none of the excluded ones (no filters: always true). */
+export function matchesTypes(section: Pick<Section, 'types'>, filters: TypeFilters): boolean {
+  return TYPE_FILTERS.every((f) => {
+    const state = filters.get(f.id)
+    if (!state) return true
+    const has = f.types.some((t) => section.types.includes(t))
+    return state === 'include' ? has : !has
+  })
 }

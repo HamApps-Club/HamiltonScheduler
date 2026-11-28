@@ -1,17 +1,20 @@
 import { useEffect } from 'react'
 import { formatTime, meetingsOf, parseDays, sectionsConflict } from '../lib/time'
-import type { SectionWithCourse } from '../lib/types'
+import type { Course, SectionWithCourse } from '../lib/types'
+import Requisite from './Requisite'
 
 interface Props {
   section: SectionWithCourse
+  labs: Course[] // lab courses that go with this class
   inSchedule: boolean
   conflicts: SectionWithCourse[] // other sections currently on the calendar
   canAdd: boolean
   onToggle: () => void
+  onSearch: (code: string) => void
   onClose: () => void
 }
 
-export default function DetailsPanel({ section: s, inSchedule, conflicts, canAdd, onToggle, onClose }: Props) {
+export default function DetailsPanel({ section: s, labs, inSchedule, conflicts, canAdd, onToggle, onSearch, onClose }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -43,8 +46,9 @@ export default function DetailsPanel({ section: s, inSchedule, conflicts, canAdd
             ))}
           </dd>
           <dt>Instructor</dt><dd>{s.instructors.join(', ') || 'Staff'}</dd>
-          <dt>Status</dt><dd><span className={`pill ${s.status}`}>{s.status}</span></dd>
-          {s.capacity != null && <><dt>Capacity</dt><dd>{s.capacity}</dd></>}
+          {labs.length > 0 && <><dt>Lab</dt><dd><Requisite text={labs.map((l) => l.code).join(', ')} onSearch={onSearch} /> (picked when you add the class)</dd></>}
+          {c.prerequisites && <><dt>Prerequisites</dt><dd><Requisite text={c.prerequisites} onSearch={onSearch} /></dd></>}
+          {c.corequisites && <><dt>Corequisites</dt><dd><Requisite text={c.corequisites} onSearch={onSearch} /></dd></>}
           {c.credits != null && <><dt>Credits</dt><dd>{c.credits}</dd></>}
           {c.department && <><dt>Department</dt><dd>{c.department}</dd></>}
           {c.cross_listed.length > 0 && <><dt>Cross-listed</dt><dd>{c.cross_listed.join(', ')}</dd></>}

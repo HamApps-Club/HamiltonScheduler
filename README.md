@@ -63,7 +63,8 @@ the filtering and the empty-search browsing all follow from it:
 ```
 
 A filter matches a section that has any of its `types` labels; with several chips on, a section must
-match all of them. With any chip on, an empty search lists every matching course. Add a test case in
+match all of them. Clicking a chip cycles **off → include (only these) → exclude (hide these) → off**
+(`cycleFilter`). With any chip on, an empty search lists every matching course. Add a test case in
 `src/lib/filters.test.ts`.
 
 Each section has `types`: the course types from Self-Service. Labels are Self-Service's own:
@@ -81,11 +82,24 @@ Each section has `types`: the course types from Self-Service. Labels are Self-Se
 | `Senior Project`, `Co-Lab Course`, `Experiential Learning`, `Physical Education Course`, … | Others; list them all with `select distinct unnest(types) from sections;` |
 
 Types are per **section** (e.g. only one MATH 113 section is first-years only), so filters keep the
-sections that match, the same way "Hide closed" does (`src/components/Sidebar.tsx`, the `results` list).
+sections that match (`src/components/Sidebar.tsx`, the `results` list).
 Other kinds of filter (time of day, credits, …) go in that same list.
 
 Keep Self-Service's labels in the database and put friendly names in `label`, so the next catalog
 import keeps matching.
+
+
+## Labs and prerequisites
+
+**Labs** are separate courses in Self-Service (CHEM 190L next to CHEM 190). `src/lib/labs.ts` pairs a
+lab with the class of the same code minus the "L", or with every lettered class of that number when
+they share one (BIO 100L goes with BIO 100B, BIO 100P, …). Search shows the lab inside its class's
+card; adding the class asks for a class time, then a lab time, on the calendar (a step with one choice
+is filled in), and saves nothing until both are picked. Class and lab share one saved card and color.
+
+**Prerequisites/corequisites** (`courses.prerequisites`, `courses.corequisites`) are the text from
+each course's public catalogue page, collected by the local data tools and shown for reading only:
+the app never checks them.
 
 ## Guest sign-ins
 
