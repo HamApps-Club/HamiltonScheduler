@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../lib/api'
 import { buildIcs, downloadIcs } from '../lib/ics'
 import { indexLabs, isLabCourse } from '../lib/labs'
+import { track } from '../lib/analytics'
 import { applyMode, applyPaletteUi, initialMode, loadPref, PALETTES, savePref, type Mode } from '../lib/theme'
 import { MAX_SCHEDULES_PER_TERM, type Course, type Schedule, type SectionWithCourse, type Term } from '../lib/types'
 import Header from './Header'
@@ -181,7 +182,11 @@ export default function Planner() {
    * `sectionId` skips the first step when a specific section was chosen (from Details).
    */
   function addCourse(course: Course, sectionId?: number) {
-    if (!choicesOf(course).length) return setNotice(`${course.code} has no sections this semester.`)
+    if (!choicesOf(course).length) {
+      track('course_add_failed', { course: course.code, term: term?.name, reason: 'no_sections' })
+      return setNotice(`${course.code} has no sections this semester.`)
+    }
+    track('course_add_started', { course: course.code, term: term?.name, from_details: sectionId !== undefined })
     setPickCourseId(null); setPreviewCourse(null)
     const onSchedule = (c: Course) => c.sections.some((s) => sectionIds.includes(s.id))
     const labSteps = (labs.labsOf.get(course.id) ?? []).filter((l) => choicesOf(l).length && !onSchedule(l))
@@ -195,11 +200,14 @@ export default function Planner() {
     if (step < a.steps.length) return setAdding({ ...a, step, picked })
     setAdding(null)
     const ids = picked.filter((id) => !sectionIds.includes(id))
-    if (ids.length) changeSections(ids, [], async (sid) => { for (const id of ids) await api.addSection(sid, id) })
+    if (!ids.length) return
+    track('course_added', { course: a.steps[0].code, term: term?.name, sections: ids.length })
+    changeSections(ids, [], async (sid) => { for (const id of ids) await api.addSection(sid, id) })
   }
   /** Replace whichever section of `course` is on the schedule with `newId`. */
   function switchSection(course: Course, newId: number) {
     const old = sectionIds.filter((id) => sectionsById.get(id)?.course.id === course.id && id !== newId)
+    track('section_switched', { course: course.code, term: term?.name })
     // Add the new section before removing the old one, so a failure never leaves the course off the schedule.
     changeSections([newId], old, async (sid) => {
       await api.addSection(sid, newId)
@@ -231,6 +239,7 @@ export default function Planner() {
   function removeCourse(course: Course) {
     const courseIds = saved.find((x) => x.course.id === course.id)?.courseIds ?? [course.id]
     const ids = sectionIds.filter((id) => courseIds.includes(sectionsById.get(id)?.course.id ?? -1))
+    track('course_removed', { course: course.code, term: term?.name })
     changeSections([], ids, (sid) => api.removeSections(sid, ids))
   }
 
@@ -241,6 +250,7 @@ export default function Planner() {
     await run(async () => {
       const s = await api.createSchedule(termId, name)
       setSchedules((list) => [...list, s]); setScheduleId(s.id)
+      track('schedule_created', { term: term?.name, schedule_count: schedules.length + 1 })
     })
   }
   async function editSchedule(s: Schedule) {
@@ -252,12 +262,14 @@ export default function Planner() {
         await api.deleteSchedule(s.id)
         const rest = schedules.filter((x) => x.id !== s.id)
         setSchedules(rest); setScheduleId(rest[0]?.id ?? null)
+        track('schedule_deleted', { term: term?.name })
       })
     }
     if (name.trim() === s.name) return
     await run(async () => {
       await api.renameSchedule(s.id, name)
       setSchedules((list) => list.map((x) => (x.id === s.id ? { ...x, name: name.trim() } : x)))
+      track('schedule_renamed', { term: term?.name })
     })
   }
 
@@ -265,9 +277,14 @@ export default function Planner() {
     if (!term || !schedule) return
     const safe = `${term.name} ${schedule.name}`.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-')
     downloadIcs(`${safe || 'schedule'}.ics`, buildIcs(term, scheduled))
+    track('calendar_exported', { term: term.name, sections: scheduled.length, courses: new Set(scheduled.map((s) => s.course.id)).size })
   }
 
   const detail = detailId ? sectionsById.get(detailId) ?? null : null
+  const detailCode = detail?.course.code
+  useEffect(() => {
+    if (detailCode) track('course_details_opened', { course: detailCode, term: term?.name })
+  }, [detailCode]) // eslint-disable-line react-hooks/exhaustive-deps -- once per course opened
   const canExport = scheduled.some((s) => s.days && s.start_time)
 
   return (
@@ -285,7 +302,7 @@ export default function Planner() {
         <div className="bars-left">
           <nav className="pillbar" aria-label="Semesters">
             {terms.map((t) => (
-              <button key={t.id} className={t.id === termId ? 'pill-tab active' : 'pill-tab'} onClick={() => setTermId(t.id)}>
+              <button key={t.id} className={t.id === termId ? 'pill-tab active' : 'pill-tab'} onClick={() => { if (t.id !== termId) track('term_switched', { term: t.name }); setTermId(t.id) }}>
                 {t.name}
               </button>
             ))}

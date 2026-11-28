@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { conflictsWithAny } from '../lib/time'
 import { TYPE_FILTERS, cycleFilter, matchesTypes, type TypeFilters } from '../lib/filters'
 import type { LabIndex } from '../lib/labs'
+import { track } from '../lib/analytics'
 import { darken } from '../lib/theme'
 import type { Course, Section, SectionWithCourse } from '../lib/types'
 import { BookIcon, ChevronsDownIcon, InfoIcon, MinusIcon, PlusIcon, ShareIcon } from './Icons'
@@ -94,13 +95,22 @@ export default function Sidebar(p: Props) {
   }, [query, p.courses, p.scheduled, p.labs, savedIds, noConflicts, typeFilters])
 
   const firstSectionId = (c: Course) => (available(c)[0] ?? c.sections[0])?.id
+  // Record what students search for once they stop typing (searches with 0 results show what's missing).
+  const searched = query.trim().toLowerCase()
+  const resultCount = results.length
+  useEffect(() => {
+    if (searched.length < 2) return
+    const t = window.setTimeout(() => track('course_searched', { query: searched, results: resultCount }), 1200)
+    return () => window.clearTimeout(t)
+  }, [searched]) // eslint-disable-line react-hooks/exhaustive-deps -- once per settled query
+
   const search = (code: string) => { setQuery(code); setExpanded(null) }
 
   return (
     <aside className="side" aria-label="Courses">
       <div className="seg">
         <button className={!noConflicts ? 'seg-btn active' : 'seg-btn'} onClick={() => setNoConflicts(false)}>Show All</button>
-        <button className={noConflicts ? 'seg-btn active' : 'seg-btn'} onClick={() => setNoConflicts(true)}>No Conflicts</button>
+        <button className={noConflicts ? 'seg-btn active' : 'seg-btn'} onClick={() => { if (!noConflicts) track('filter_toggled', { filter: 'no_conflicts', state: 'include', on: true }); setNoConflicts(true) }}>No Conflicts</button>
       </div>
 
       <div className="search-row">
@@ -114,7 +124,11 @@ export default function Sidebar(p: Props) {
             <button key={f.id} className={`chip${state === 'include' ? ' active' : ''}${state === 'exclude' ? ' excluded' : ''}`}
               aria-label={`${f.label}: ${state === 'include' ? 'showing only these' : state === 'exclude' ? 'hiding these' : 'off'}`}
               title={state === 'include' ? 'Click again to hide these instead' : state === 'exclude' ? 'Click again to turn off' : 'Click to show only these; twice to hide them'}
-              onClick={() => setTypeFilters((prev) => cycleFilter(prev, f.id))}>
+              onClick={() => {
+                const state = cycleFilter(typeFilters, f.id).get(f.id) ?? 'off'
+                track('filter_toggled', { filter: f.id, state, on: state !== 'off' })
+                setTypeFilters((prev) => cycleFilter(prev, f.id))
+              }}>
               {state === 'exclude' && <span aria-hidden="true">✕ </span>}{f.label}
             </button>
           )

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ALLOWED_EMAIL_DOMAIN, isLocalSupabase, supabase } from '../lib/supabase'
+import { track } from '../lib/analytics'
 
 // Sign-in works like HamEats: a full-page redirect to Google, which sends the student back to our own
 // server at /api/auth/callback/google (infra/auth.ts). Google's screen therefore says
@@ -32,6 +33,7 @@ export default function SignIn({ error }: { error: string | null }) {
   const [leaving, setLeaving] = useState(false)
 
   function signInWithGoogle() {
+    track('sign_in_clicked', undefined, true)
     setLeaving(true)
     const ret = window.location.pathname + window.location.search
     window.location.assign(`/api/auth/signin/google?return=${encodeURIComponent(ret)}`)

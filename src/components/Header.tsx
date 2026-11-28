@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { PALETTES, type Mode } from '../lib/theme'
 import { ChatIcon, LogoMark, LogoutIcon, MoonIcon, PaletteIcon, SunIcon } from './Icons'
+import { track } from '../lib/analytics'
 
 const FEEDBACK_URL = 'mailto:hamappsdevs@gmail.com?subject=Hamilton%20Scheduler%20feedback'
 
@@ -50,7 +51,7 @@ export default function Header({ mode, onToggleMode, paletteIndex, onPalette }: 
           )}
         </div>
         <a className="hdr-btn" href={FEEDBACK_URL}><ChatIcon /> Feedback</a>
-        <button className="hdr-btn" onClick={() => supabase.auth.signOut()}><LogoutIcon /> Logout</button>
+        <button className="hdr-btn" onClick={() => { track('signed_out'); void supabase.auth.signOut() }}><LogoutIcon /> Logout</button>
       </nav>
     </header>
   )

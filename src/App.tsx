@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { ALLOWED_EMAIL_DOMAIN, initialAuthError, supabase } from './lib/supabase'
 import SignIn from './components/SignIn'
 import Planner from './components/Planner'
+import { identifyStudent, resetAnalytics } from './lib/analytics'
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -23,9 +24,14 @@ export default function App() {
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
+      if (data.session) identifyStudent(data.session.user.id)
       setLoading(false)
     })
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    const { data } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s)
+      if (s) identifyStudent(s.user.id)
+      else if (event === 'SIGNED_OUT') resetAnalytics()
+    })
     return () => data.subscription.unsubscribe()
   }, [])
 
